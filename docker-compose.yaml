@@ -43,7 +43,7 @@ services:
     volumes:
       # 挂载Redis配置文件，实现自定义配置
       - ./devops/redis/data:/data
-    command: redis-server
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     networks:
       - app_network
     

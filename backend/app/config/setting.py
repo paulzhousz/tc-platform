@@ -190,6 +190,43 @@ class Settings(BaseSettings):
     REQUEST_LIMITER_REDIS_PREFIX: str = "fastapiadmin:request_limiter:"
 
     # ================================================= #
+    # ******************* Modbus 控制模块配置 ********** #
+    # ================================================= #
+    # LLM Agent 配置
+    MODBUS_LLM_BASE_URL: str = "https://api-inference.modelscope.cn/v1/"
+    MODBUS_LLM_API_KEY: str = ""
+    MODBUS_LLM_MODEL_NAME: str = "Qwen/Qwen3-8B"
+    MODBUS_LLM_TEMPERATURE: float = 0
+    MODBUS_LLM_SESSION_TTL_MINUTES: int = 10
+    MODBUS_LLM_MAX_HISTORY_TURNS: int = 20
+
+    # Modbus 连接池配置
+    MODBUS_POOL_SIZE: int = 5
+    MODBUS_CONNECT_TIMEOUT: int = 5
+    MODBUS_READ_TIMEOUT: int = 3
+    MODBUS_IDLE_TIMEOUT: int = 300
+
+    # 重试配置
+    MODBUS_RETRY_ENABLED: bool = True
+    MODBUS_RETRY_TIMES: int = 3
+    MODBUS_RETRY_INTERVAL: float = 1.0
+
+    # 状态轮询配置
+    MODBUS_POLL_ENABLED: bool = True
+    MODBUS_POLL_INTERVAL: int = 5
+
+    # 日志保留配置
+    MODBUS_LOG_RETENTION_DAYS: int = 90
+    MODBUS_PENDING_EXPIRE_MINUTES: int = 10
+
+    # FunASR 语音服务配置（现有基础设施，直接连接使用）
+    MODBUS_FUNASR_WS_URL: str = "ws://localhost:10095"
+    MODBUS_FUNASR_MODE: str = "2pass-offline"
+    MODBUS_FUNASR_AUDIO_FS: int = 16000
+    MODBUS_SILENCE_THRESHOLD: float = 0.01
+    MODBUS_SILENCE_DURATION: float = 5
+
+    # ================================================= #
     # ******************* 重构配置 ******************* #
     # ================================================= #
     @property

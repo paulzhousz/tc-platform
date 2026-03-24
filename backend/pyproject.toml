@@ -41,6 +41,7 @@ dependencies = [
     "pydantic-settings==2.5.2",                 # 配置设置
     "pydantic-validation-decorator==0.1.4",     # 模型验证
     "pyjwt==2.9.0",                             # OAuth2
+    "pymodbus>=3.12.1",
     "pymysql==1.1.2",                           # mysql 同步步操作数据库基于 pymysql：aiomysql 是 pymysql 的异步版本，pymysql 是一个纯 Python 实现的 MySQL 客户端。成熟度：aiomysql 相对较为成熟，社区支持较好，文档也比较完善。
     "pytest==9.0.2",
     "python-multipart==0.0.9",                  # request.form() 对表单进行「解析」时安装

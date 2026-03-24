@@ -39,3 +39,38 @@ backend/env/.env.prod
 frontend/.env.development
 frontend/.env.production
 docker-compose.yaml
+# OpenSpec Worktree Gitignore 配置
+# 将此内容添加到项目的 .gitignore 文件中
+
+# ===========================================
+# Worktree 目录
+# ===========================================
+
+# 忽略所有 worktree
+.worktrees/
+
+# 但可以保留目录结构（可选）
+# !.worktrees/.gitkeep
+
+# ===========================================
+# OpenSpec 相关
+# ===========================================
+
+# 变更目录中的临时文件
+openspec/changes/*/.*.swp
+openspec/changes/*/*.tmp
+
+# 归档目录中的临时文件
+openspec/changes/archive/*/.*.swp
+openspec/changes/archive/*/*.tmp
+
+# ===========================================
+# AI 助手相关
+# ===========================================
+
+# Claude Code 会话文件
+# .claude/
+
+# AI 助手生成的临时文件
+*.ai-draft
+*.ai-temp

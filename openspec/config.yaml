@@ -1,0 +1,61 @@
+# OpenSpec 配置示例
+# 将此文件复制到项目根目录的 openspec/config.yaml
+
+schema: fastapiadmin-dev
+
+# Git Worktree 集成配置
+worktree:
+  # 是否启用 Worktree 模式
+  enabled: true
+  # Worktree 存放目录
+  directory: .worktrees
+  # 分支前缀
+  branch_prefix: feature/
+
+# 项目上下文
+context: |
+  语言：中文（简体）
+  所有产出物必须用简体中文撰写。but:
+  - Keep technical terms like "API", "REST", "GraphQL" in English
+  - Code examples and file paths remain in English
+
+  技术栈:
+    后端: FastAPI + SQLAlchemy 2.0
+    Web前端: Vue3 + TypeScript + Element Plus
+    移动端: uni-app + Vue3 + Wot Design Uni
+
+  架构规范:
+    - 四层架构: model → schema → crud → service → controller
+    - 枚举类在模块自己的 model.py 中定义（app/common/enums.py 是系统内置，勿修改）
+    - 路由自动发现: module_<名> → /<名>
+    - 权限格式: module_<模块>:<子模块>:<操作>
+
+  数据库:
+    - 表名格式: <模块简称>_<实体名>（如 task_job, app_myapp）
+    - 注意: sys_ 前缀仅用于系统核心模块，Plugin 模块使用模块简称
+    - ModelMixin 提供: id, uuid, status, description, created_time, updated_time
+    - UserMixin 提供: created_id, updated_id, created_by, updated_by
+
+  Git Worktree:
+    - 并行开发多个功能时使用
+    - 每个功能独立 worktree，互不干扰
+    - 归档时选择合并或放弃
+
+# 规则配置
+rules:
+  proposal:
+    - 明确模块名和子模块名
+    - 列出所有权限标识
+    - 确认是否需要 Worktree 模式
+  specs:
+    - 使用 GIVEN/WHEN/THEN 格式
+    - 定义完整的 CRUD 接口
+    - 明确分页参数使用 page_no, page_size
+  design:
+    - 遵循四层架构
+    - 列出所有文件路径
+    - 说明使用的基类和模式
+  tasks:
+    - 按层次分组任务
+    - 使用 checkbox 格式
+    - 每个任务可在一个会话内完成

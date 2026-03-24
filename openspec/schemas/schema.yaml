@@ -1,0 +1,304 @@
+name: fastapiadmin-dev
+version: 2
+description: FastAPI Admin 专用工作流 - 针对框架规范优化的 proposal → specs → design → tasks 流程，支持 Git Worktree 隔离开发
+
+# Git Worktree 集成配置
+worktree:
+  enabled: true
+  directory: .worktrees
+  branch_prefix: feature/
+
+artifacts:
+  - id: proposal
+    generates: proposal.md
+    description: 模块开发提案
+    template: proposal.md
+    instruction: |
+      创建 FastAPI Admin 模块开发提案。
+
+      ## 前置检查
+
+      1. 检测当前是否在 Git 仓库中
+      2. 检测当前是否已有 OpenSpec 配置
+      3. 如果启用 Worktree 模式，询问用户是否创建
+
+      ## Worktree 创建流程（如启用）
+
+      如果用户选择使用 Worktree 模式：
+
+      ```bash
+      # 1. 生成变更名称（从需求自动生成或用户指定）
+      CHANGE_NAME="<变更名>"  # 如 add-product-module
+
+      # 2. 创建分支
+      git branch feature/${CHANGE_NAME}
+
+      # 3. 创建 worktree
+      mkdir -p .worktrees
+      git worktree add .worktrees/${CHANGE_NAME} feature/${CHANGE_NAME}
+
+      # 4. 切换工作目录
+      cd .worktrees/${CHANGE_NAME}
+      ```
+
+      ## 提案内容
+
+      ### Why
+      - 业务背景和需求来源
+      - 解决什么问题
+
+      ### What Changes
+      - 新增功能点列表
+      - 修改的功能点（如有）
+      - **BREAKING** 标记破坏性变更
+
+      ### Capabilities
+      使用 `module_<模块名>-<子模块名>` 格式，例如：
+      - `module_product-product`: 产品管理 CRUD
+
+      ### Impact
+      - 影响的数据库表
+      - 影响的 API 路由
+      - 前端页面变更
+      - 权限配置需求
+
+      ### Worktree 信息
+      自动填充分支名、worktree 路径等信息
+    requires: []
+
+  - id: specs
+    generates: "specs/**/*.md"
+    description: 功能规格说明
+    template: spec.md
+    instruction: |
+      创建 FastAPI Admin 模块规格说明。
+
+      ## 数据模型设计
+      - 表名规范：`<模块简称>_<实体名>`
+      - ModelMixin 提供: id, uuid, status, description, created_time, updated_time
+      - UserMixin 提供: created_id, updated_id, created_by, updated_by
+      - 枚举类：在模块自己的 `model.py` 中定义
+
+      ## API 接口规格
+      - `GET /<模块>/<子模块>/list` - 列表查询（分页参数：page_no, page_size）
+      - `GET /<模块>/<子模块>/detail/{id}` - 详情查询
+      - `POST /<模块>/<子模块>/create` - 创建
+      - `PUT /<模块>/<子模块>/update/{id}` - 更新（id 在路径中）
+      - `DELETE /<模块>/<子模块>/delete` - 删除（body 传递 id 数组）
+
+      ## 业务规则
+      使用 GIVEN/WHEN/THEN 格式描述场景。
+    requires:
+      - proposal
+
+  - id: design
+    generates: design.md
+    description: 技术设计方案
+    template: design.md
+    instruction: |
+      创建 FastAPI Admin 模块技术设计。
+
+      ## 后端架构设计（四层架构）
+
+      ### 1. Model 层
+      - 继承 ModelMixin, UserMixin
+      - 使用 SQLAlchemy 2.0 Mapped/mapped_column
+      - 定义 __loader_options__ 预加载关系
+
+      ### 2. Schema 层
+      - CreateSchema, UpdateSchema, OutSchema, QueryParam
+
+      ### 3. CRUD 层
+      - 继承 CRUDBase，使用 auth: AuthSchema 初始化
+
+      ### 4. Service 层
+      - 使用 @classmethod，第一个参数 auth: AuthSchema
+
+      ### 5. Controller 层
+      - 使用 AuthPermission 注入权限
+      - 使用 OperationLogRoute 记录日志
+
+      ## 文件清单
+      列出需要创建/修改的所有文件路径。
+    requires:
+      - proposal
+
+  - id: tasks
+    generates: tasks.md
+    description: 实现任务清单
+    template: tasks.md
+    instruction: |
+      创建 FastAPI Admin 模块开发任务清单。
+
+      ## 任务分组
+
+      ### 1. 数据库层
+      - 创建 model.py（枚举 + ORM 模型）
+      - 数据库迁移
+
+      ### 2. Schema 层
+      - 创建 schema.py
+
+      ### 3. CRUD 层
+      - 创建 crud.py
+
+      ### 4. Service 层
+      - 创建 service.py
+
+      ### 5. Controller 层
+      - 创建 controller.py
+
+      ### 6. Web 前端
+      - API 文件
+      - 页面组件
+
+      ### 7. 移动端（可选）
+      - 列表页、详情页
+
+      ### 8. 权限配置
+      - 创建菜单、配置权限
+
+      ### 9. 测试验证
+      - 接口测试、前端测试
+
+      每个任务应足够小，可在一个会话内完成。
+    requires:
+      - specs
+      - design
+
+apply:
+  requires: [tasks]
+  tracks: tasks.md
+  instruction: |
+    按照 FastAPI Admin 开发规范实现任务。
+
+    ## 环境确认
+
+    如果启用 Worktree 模式：
+    1. 确认当前在 worktree 目录中：`.worktrees/<变更名>/`
+    2. 确认当前分支：`feature/<变更名>`
+
+    ## 开发流程
+
+    1. 阅读 design.md 了解技术方案
+    2. 阅读 specs/*.md 了解功能需求
+    3. 按 tasks.md 中的任务顺序逐一实现
+    4. 完成一个任务后勾选 `- [x]`
+    5. 定期提交代码：`git add . && git commit -m "feat: xxx"`
+
+    ## 提交规范
+
+    使用 Conventional Commits：
+    - `feat:` 新功能
+    - `fix:` 修复
+    - `docs:` 文档
+    - `refactor:` 重构
+    - `test:` 测试
+
+    ## 参考模板
+    - 后端：fastapiadmin-dev/references/backend.md
+    - Web前端：fastapiadmin-dev/references/web-frontend.md
+    - 移动端：fastapiadmin-dev/references/mobile.md
+
+archive:
+  requires: [tasks]
+  instruction: |
+    归档变更并处理 Git Worktree。
+
+    ## 归档前检查
+
+    1. 确认所有任务已完成（tasks.md 全部勾选）
+    2. 确认所有代码已提交
+
+    ## 归档步骤
+
+    1. 提交最终变更（如有未提交的）
+    2. 移动变更文档到 archive/ 目录
+    3. 合并 specs 到主规格
+
+    ## 显示变更摘要
+
+    向用户展示：
+    ```
+    ==========================================
+               变更摘要
+    ==========================================
+
+    变更名称: <变更名>
+    新增文件: X 个
+    修改文件: Y 个
+    提交次数: Z 次
+
+    最近提交:
+    - feat: 完成 XXX 功能
+    - feat: 添加 YYY 页面
+    ...
+
+    ==========================================
+    ```
+
+    ## 询问用户选择
+
+    显示以下选项让用户选择：
+
+    ```
+    请选择变更处理方式：
+
+    [1] 合并到主分支并删除 worktree（推荐）
+        - 将变更合并到主分支
+        - 删除 worktree 目录
+        - 删除 feature 分支
+
+    [2] 仅合并，保留 worktree
+        - 将变更合并到主分支
+        - 保留 worktree 以便继续开发
+
+    [3] 不合并，保留 worktree
+        - 暂不合并
+        - 切换回主仓库继续其他工作
+
+    [4] 放弃变更，删除 worktree
+        - 放弃所有变更
+        - 强制删除 worktree 和分支
+
+    请输入选择 [1-4]:
+    ```
+
+    ## 执行用户选择
+
+    ### 选项 1：合并并清理
+    ```bash
+    MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
+    cd "$MAIN_REPO"
+    git merge feature/<变更名>
+    git worktree remove .worktrees/<变更名>
+    git branch -d feature/<变更名>
+    ```
+
+    ### 选项 2：仅合并
+    ```bash
+    MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
+    cd "$MAIN_REPO"
+    git merge feature/<变更名>
+    echo "Worktree 已保留在: .worktrees/<变更名>"
+    ```
+
+    ### 选项 3：不合并
+    ```bash
+    MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
+    cd "$MAIN_REPO"
+    echo "变更暂未合并，可稍后手动合并: git merge feature/<变更名>"
+    ```
+
+    ### 选项 4：放弃变更
+    ```bash
+    git worktree remove .worktrees/<变更名> --force
+    git branch -D feature/<变更名>
+    ```
+
+    ## 归档完成
+
+    告知用户：
+    - 归档位置：`openspec/changes/archive/YYYY-MM-DD-<变更名>/`
+    - 当前工作目录状态
+    - 下一步操作建议

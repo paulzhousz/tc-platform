@@ -22,7 +22,9 @@
 ### 排除功能
 
 - 用户权限管理（使用系统公共模块）
-- 操作日志管理（使用系统 OperationLogRoute）
+- HTTP 请求审计日志（使用系统 OperationLogRoute，自动记录所有 API 调用）
+
+> **注意**：本模块包含独立的 PLC 操作审计日志（CommandLog），用于记录设备读写操作的详细信息，与系统的 HTTP 请求审计是两个独立的日志体系。
 
 ## Approach
 

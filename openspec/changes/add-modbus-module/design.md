@@ -138,12 +138,128 @@ class TagPointModel(ModelMixin):
     device: Mapped["DeviceModel"] = relationship("DeviceModel", back_populates="tags")
 ```
 
-### 2.3 其他模型
+### 2.3 CommandLog（PLC 操作日志）
 
-- **CommandLogModel**: 操作审计日志
-- **PendingConfirmModel**: 待确认操作
-- **AgentSessionModel**: LLM Agent 会话
-- **ChatHistoryModel**: 聊天历史
+> **重要说明**：`CommandLogModel` 用于记录 PLC 控制操作的业务审计日志，与系统的 `OperationLogRoute`（HTTP 请求审计）是独立的两个日志体系。
+> - `OperationLogRoute`：记录所有 HTTP API 请求的用户操作审计
+> - `CommandLogModel`：记录 PLC 设备的读写操作详情，包含设备ID、点位ID、操作值、执行状态等
+
+```python
+class CommandLogModel(ModelMixin):
+    """PLC 操作审计日志"""
+    __tablename__ = "modbus_command_logs"
+
+    # 操作来源
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id: Mapped[str | None] = mapped_column(String(50), comment="Agent 会话ID")
+
+    # 操作目标
+    device_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("modbus_devices.id"))
+    tag_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("modbus_tags.id"))
+
+    # 操作内容
+    action: Mapped[str] = mapped_column(String(10), nullable=False, comment="READ/WRITE")
+    request_value: Mapped[float | None] = mapped_column(Float, comment="请求值")
+    actual_value: Mapped[float | None] = mapped_column(Float, comment="实际值")
+
+    # 结果
+    status: Mapped[str] = mapped_column(String(20), default="pending", comment="pending/success/failed/cancelled")
+    error_message: Mapped[str | None] = mapped_column(Text, comment="错误信息")
+
+    # 确认信息
+    confirmation_required: Mapped[bool] = mapped_column(Boolean, default=False, comment="是否需要确认")
+    confirmed_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    # AI 信息
+    ai_reasoning: Mapped[str | None] = mapped_column(Text, comment="AI 推理过程")
+    user_input: Mapped[str | None] = mapped_column(Text, comment="用户原始输入")
+
+    # 执行详情
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    execution_time: Mapped[float | None] = mapped_column(Float, comment="执行耗时(ms)")
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime)
+```
+
+### 2.4 PendingConfirm（待确认操作）
+
+```python
+class PendingConfirmModel(ModelMixin):
+    """待人工确认的操作"""
+    __tablename__ = "modbus_pending_confirms"
+
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"))
+    command_log_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("modbus_command_logs.id"))
+
+    # 操作详情（冗余存储，便于展示）
+    device_name: Mapped[str | None] = mapped_column(String(100))
+    tag_name: Mapped[str | None] = mapped_column(String(100))
+    target_value: Mapped[float | None] = mapped_column(Float)
+    unit: Mapped[str | None] = mapped_column(String(20))
+
+    # 状态
+    status: Mapped[str] = mapped_column(String(20), default="pending", comment="pending/confirmed/rejected/expired")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, comment="过期时间")
+
+    # 审核信息
+    reviewed_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    review_comment: Mapped[str | None] = mapped_column(Text)
+
+    # AI 信息
+    user_input: Mapped[str | None] = mapped_column(Text)
+    ai_explanation: Mapped[str | None] = mapped_column(Text)
+```
+
+### 2.5 AgentSession（LLM Agent 会话）
+
+```python
+class AgentSessionModel(ModelMixin):
+    """LLM Agent 会话"""
+    __tablename__ = "modbus_agent_sessions"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+
+    # 上下文（简单字段，向后兼容）
+    last_device_id: Mapped[int | None] = mapped_column(Integer)
+    last_tag_id: Mapped[int | None] = mapped_column(Integer)
+
+    # 详细操作上下文
+    # 结构: {"last_device": {...}, "last_tag": {...}, "last_operation": {...}}
+    operation_context: Mapped[dict | None] = mapped_column(JSON)
+
+    # 对话历史
+    chat_history: Mapped[list | None] = mapped_column(JSON)
+
+    # 时间
+    last_active: Mapped[datetime | None] = mapped_column(DateTime)
+    ttl_minutes: Mapped[int] = mapped_column(Integer, default=10)
+```
+
+### 2.6 ChatHistory（聊天历史）
+
+```python
+class ChatHistoryModel(ModelMixin):
+    """用户聊天历史（长期存储）"""
+    __tablename__ = "modbus_chat_history"
+
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+
+    # 预览信息
+    title: Mapped[str | None] = mapped_column(String(200), comment="首条用户消息摘要")
+
+    # 对话内容
+    messages: Mapped[list] = mapped_column(JSON, nullable=False)
+
+    # 设备上下文
+    device_count: Mapped[int] = mapped_column(Integer, default=0)
+    device_names: Mapped[list | None] = mapped_column(JSON)
+
+    # 时间
+    start_time: Mapped[datetime | None] = mapped_column(DateTime)
+    end_time: Mapped[datetime | None] = mapped_column(DateTime)
 
 ## 3. 配置项设计
 
@@ -252,6 +368,13 @@ class Settings:
 | `a-spin` | `v-loading` 指令 | 使用方式不同 |
 | `a-empty` | `el-empty` | 基本兼容 |
 | `a-message.success()` | `ElMessage.success()` | 函数调用方式相同 |
+| `a-popconfirm` | `el-popconfirm` | 基本兼容，气泡确认框 |
+| `a-descriptions` | `el-descriptions` | 描述列表，基本兼容 |
+| `a-badge` | `el-badge` | 徽标，基本兼容 |
+| `a-dropdown` | `el-dropdown` | 下拉菜单，基本兼容 |
+| `a-switch` | `el-switch` | 开关，基本兼容 |
+| `a-radio-group` | `el-radio-group` | 单选组，基本兼容 |
+| `a-checkbox-group` | `el-checkbox-group` | 多选组，基本兼容 |
 
 ### 4.2 样式适配
 
@@ -365,9 +488,105 @@ class PLCService:
 - 支持 CRUD 操作
 - 点位管理通过抽屉或弹窗
 
-## 7. 数据库迁移
+## 7. 安全控制机制
 
-### 7.1 Alembic 迁移脚本
+### 7.1 写入操作确认
+
+所有 write/adjust 操作必须经过以下安全检查：
+
+| 检查项 | 触发条件 | 处理方式 |
+|-------|---------|---------|
+| 强制确认 | `TagPointModel.requires_confirmation == True` | 必须用户确认 |
+| 范围校验 | `value < min_value` 或 `value > max_value` | 直接拒绝，返回错误 |
+| 阈值确认 | `value` 超过 `confirmation_threshold` 比例 | 必须用户确认 |
+| 只读保护 | `TagPointModel.access_type == 'READ'` | 直接拒绝写入 |
+
+### 7.2 待确认操作超时
+
+```python
+# PendingConfirmModel 在创建时设置过期时间
+expires_at = datetime.now() + timedelta(minutes=settings.MODBUS_PENDING_EXPIRE_MINUTES)
+
+# 过期后操作视为已拒绝，CleanupService 定期清理
+```
+
+### 7.3 权限校验
+
+| 操作 | 所需权限 |
+|-----|---------|
+| 读取 PLC | `modbus:control:read` |
+| 写入 PLC | `modbus:control:write` |
+| 确认操作 | `modbus:pending:confirm` |
+
+### 7.4 LLM Agent 安全措施
+
+1. **工具沙箱**：LLM 只能调用预定义的工具，不能执行任意代码
+2. **参数校验**：所有工具参数经过 Pydantic 验证
+3. **操作审计**：所有 PLC 操作记录到 `CommandLogModel`
+4. **人工确认**：高风险操作必须人工确认后才执行
+
+## 8. WebSocket 消息协议
+
+### 8.1 连接认证
+
+```javascript
+// 客户端连接时携带 token
+const ws = new WebSocket(`ws://host/ws/modbus?token=${jwtToken}`);
+```
+
+### 8.2 服务端推送消息格式
+
+```typescript
+// 设备状态变化
+{
+  "type": "device_status",
+  "data": {
+    "device_id": 1,
+    "device_name": "智能空调",
+    "status": "online",
+    "last_seen": "2026-03-24T21:00:00Z"
+  }
+}
+
+// 点位值变化
+{
+  "type": "tag_value",
+  "data": {
+    "device_id": 1,
+    "tag_id": 5,
+    "tag_name": "温度设定值",
+    "value": 26.0,
+    "unit": "°C",
+    "previous_value": 25.0
+  }
+}
+
+// 操作结果通知
+{
+  "type": "operation_result",
+  "data": {
+    "command_log_id": 123,
+    "success": true,
+    "message": "写入成功"
+  }
+}
+
+// 待确认操作通知
+{
+  "type": "pending_confirm",
+  "data": {
+    "pending_confirm_id": 1,
+    "device_name": "智能空调",
+    "tag_name": "频率设定",
+    "target_value": 50,
+    "unit": "Hz"
+  }
+}
+```
+
+## 9. 数据库迁移
+
+### 9.1 Alembic 迁移脚本
 
 ```python
 # alembic/versions/xxx_add_modbus_tables.py

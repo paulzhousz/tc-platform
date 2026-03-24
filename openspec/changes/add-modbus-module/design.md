@@ -57,8 +57,10 @@
 
 ### 2.1 Device（设备）
 
+> **设计说明**：PLC 设备是**共享工业资源**，所有用户应能看到和控制同一批设备，因此不继承 `UserMixin`。操作审计通过 `CommandLogModel.user_id` 记录具体操作人。
+
 ```python
-class DeviceModel(ModelMixin, UserMixin):
+class DeviceModel(ModelMixin):
     """PLC 设备"""
     __tablename__ = "modbus_devices"
 

@@ -295,12 +295,15 @@ MODBUS_POLL_INTERVAL=5
 MODBUS_LOG_RETENTION_DAYS=90
 MODBUS_PENDING_EXPIRE_MINUTES=10
 
-# FunASR 语音服务配置
+# FunASR 语音服务配置（现有基础设施，直接连接使用）
 MODBUS_FUNASR_WS_URL=ws://localhost:10095
 MODBUS_FUNASR_MODE=2pass-offline
 MODBUS_FUNASR_AUDIO_FS=16000
 MODBUS_SILENCE_THRESHOLD=0.01
 MODBUS_SILENCE_DURATION=5
+```
+
+> **注意**：FunASR WebSocket 服务是现有基础设施，已在 `ws://localhost:10095` 运行，前端直接连接使用即可，无需在本模块中部署或实现。
 ```
 
 ### 3.2 配置类定义
@@ -339,7 +342,7 @@ class Settings:
     MODBUS_LOG_RETENTION_DAYS: int = 90
     MODBUS_PENDING_EXPIRE_MINUTES: int = 10
 
-    # FunASR 语音服务配置
+    # FunASR 语音服务配置（现有基础设施，直接连接使用）
     MODBUS_FUNASR_WS_URL: str = "ws://localhost:10095"
     MODBUS_FUNASR_MODE: str = "2pass-offline"
     MODBUS_FUNASR_AUDIO_FS: int = 16000

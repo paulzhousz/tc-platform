@@ -23,7 +23,7 @@ export interface CommandLog {
   user_input?: string;
   retry_count: number;
   execution_time?: number;
-  created_at: string;
+  created_time: string;
   executed_at?: string;
 }
 

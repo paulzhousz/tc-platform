@@ -19,8 +19,8 @@ export interface Device {
   parity?: string;
   status: "online" | "offline" | "error";
   last_seen?: string;
-  created_at: string;
-  updated_at?: string;
+  created_time: string;
+  updated_time?: string;
 }
 
 /** 点位信息 */
@@ -47,7 +47,7 @@ export interface TagPoint {
   is_active: boolean;
   current_value?: number;
   last_updated?: string;
-  created_at: string;
+  created_time: string;
 }
 
 // ==================== Device API ====================

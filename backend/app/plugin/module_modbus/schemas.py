@@ -107,8 +107,8 @@ class DeviceResponse(DeviceBase):
     id: int
     status: DeviceStatus
     last_seen: datetime | None
-    created_at: datetime
-    updated_at: datetime | None
+    created_time: datetime
+    updated_time: datetime | None
 
     class Config:
         from_attributes = True
@@ -175,7 +175,7 @@ class TagPointResponse(TagPointBase):
     device_id: int
     current_value: float | None
     last_updated: datetime | None
-    created_at: datetime
+    created_time: datetime
 
     class Config:
         from_attributes = True
@@ -207,7 +207,7 @@ class CommandLogResponse(BaseModel):
     user_input: str | None
     retry_count: int
     execution_time: float | None
-    created_at: datetime
+    created_time: datetime
     executed_at: datetime | None
 
     class Config:
@@ -245,7 +245,7 @@ class PendingConfirmResponse(BaseModel):
     review_comment: str | None
     user_input: str | None
     ai_explanation: str | None
-    created_at: datetime
+    created_time: datetime
 
     class Config:
         from_attributes = True
@@ -394,7 +394,7 @@ class ChatHistoryResponse(BaseModel):
     device_names: list[str]
     start_time: datetime
     end_time: datetime | None
-    created_at: datetime
+    created_time: datetime
 
     class Config:
         from_attributes = True

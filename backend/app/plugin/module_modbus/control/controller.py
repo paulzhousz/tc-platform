@@ -80,7 +80,7 @@ async def list_devices(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:query"]))],
 ) -> JSONResponse:
     """获取设备列表"""
-    stmt = select(DeviceModel).order_by(DeviceModel.created_at.desc())
+    stmt = select(DeviceModel).order_by(DeviceModel.created_time.desc())
     devices = (await auth.db.execute(stmt)).scalars().all()
 
     items = [DeviceResponse.model_validate(d) for d in devices]
@@ -681,7 +681,7 @@ async def get_chat_history_list(
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await auth.db.execute(count_stmt)).scalar() or 0
 
-    stmt = stmt.order_by(ChatHistoryModel.created_at.desc()).offset(offset).limit(page_size)
+    stmt = stmt.order_by(ChatHistoryModel.created_time.desc()).offset(offset).limit(page_size)
     histories = (await auth.db.execute(stmt)).scalars().all()
 
     items = [
@@ -693,7 +693,7 @@ async def get_chat_history_list(
             device_names=h.device_names or [],
             start_time=h.start_time,
             end_time=h.end_time,
-            created_at=h.created_at,
+            created_time=h.created_time,
         )
         for h in histories
     ]
@@ -732,7 +732,7 @@ async def get_chat_history_detail(
             device_names=history.device_names or [],
             start_time=history.start_time,
             end_time=history.end_time,
-            created_at=history.created_at,
+            created_time=history.created_time,
             messages=history.messages or [],
         ),
         msg="获取成功",
@@ -882,15 +882,15 @@ async def list_logs(
     if status:
         stmt = stmt.where(CommandLogModel.status == status)
     if start_time:
-        stmt = stmt.where(CommandLogModel.created_at >= start_time)
+        stmt = stmt.where(CommandLogModel.created_time >= start_time)
     if end_time:
-        stmt = stmt.where(CommandLogModel.created_at <= end_time)
+        stmt = stmt.where(CommandLogModel.created_time <= end_time)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await auth.db.execute(count_stmt)).scalar() or 0
 
     offset = (page - 1) * page_size
-    stmt = stmt.order_by(CommandLogModel.created_at.desc()).offset(offset).limit(page_size)
+    stmt = stmt.order_by(CommandLogModel.created_time.desc()).offset(offset).limit(page_size)
     logs = (await auth.db.execute(stmt)).scalars().all()
 
     items = [CommandLogResponse.model_validate(log) for log in logs]
@@ -944,7 +944,7 @@ async def list_pending(
     else:
         stmt = stmt.where(PendingConfirmModel.status == "pending")
 
-    stmt = stmt.order_by(PendingConfirmModel.created_at.desc())
+    stmt = stmt.order_by(PendingConfirmModel.created_time.desc())
     pendings = (await auth.db.execute(stmt)).scalars().all()
 
     items = [PendingConfirmResponse.model_validate(p) for p in pendings]

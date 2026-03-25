@@ -44,7 +44,7 @@ class LogCleanupService:
         """
         cutoff = datetime.now() - timedelta(days=self._retention_days)
 
-        stmt = delete(CommandLogModel).where(CommandLogModel.created_at < cutoff)
+        stmt = delete(CommandLogModel).where(CommandLogModel.created_time < cutoff)
         result = await self.db.execute(stmt)
         await self.db.commit()
 

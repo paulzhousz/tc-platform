@@ -58,7 +58,7 @@ export interface ChatHistoryItem {
   device_names: string[];
   start_time: string;
   end_time?: string;
-  created_at: string;
+  created_time: string;
 }
 
 /** 聊天历史详情 */

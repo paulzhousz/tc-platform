@@ -99,10 +99,10 @@
     - [x] DELETE /chat-history/{id}
 
 ### 3.3 WebSocket 路由
-- [ ] 创建 WebSocket 端点 `/ws/modbus`
-- [ ] 实现连接认证（Token 验证）
-- [ ] 实现消息广播逻辑
-- [ ] 在 `init_app.py` 中注册 WebSocket 路由
+- [x] 创建 WebSocket 端点 `/ws/modbus`
+- [x] 实现连接认证（Token 验证）
+- [x] 实现消息广播逻辑
+- [x] 在 `controller.py` 中注册 WebSocket 路由
 
 ---
 

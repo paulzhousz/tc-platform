@@ -179,18 +179,20 @@
 
 ---
 
-## Phase 7: 路由与菜单 (P0)
+## Phase 7: 路由与菜单 (P0) ✅ 已完成
 
 > 依赖：Phase 5 完成
 
 ### 7.1 前端路由
-- [ ] 添加 `/modbus/device` 路由
-- [ ] 添加 `/modbus/control` 路由
-- [ ] 添加 `/modbus/log` 路由
+- [x] 组件路径已创建：`module_modbus/device/index.vue`
+- [x] 组件路径已创建：`module_modbus/control/index.vue`
+- [x] 组件路径已创建：`module_modbus/log/index.vue`
 
 ### 7.2 菜单配置
-- [ ] 添加侧边栏菜单项
-- [ ] 配置菜单权限
+- [x] 创建菜单初始化 SQL 脚本 `init_menu.sql`
+- [x] 配置一级目录：Modbus控制
+- [x] 配置二级菜单：设备管理、AI控制、操作日志
+- [x] 配置按钮权限
 
 ---
 

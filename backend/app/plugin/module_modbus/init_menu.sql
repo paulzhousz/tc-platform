@@ -12,9 +12,9 @@ WITH modbus_menu AS (
         "component_path", "redirect", "hidden", "keep_alive", "always_show", "title", "affix",
         "uuid", "status", "created_time", "updated_time"
     ) VALUES (
-        'Modbus控制', 1, 200, 'ep:setting', 'Modbus', '/modbus',
+        'Modbus控制', 1, 200, 'el-icon-Connection', 'Modbus', '/modbus',
         NULL, '/modbus/device', false, false, true, 'Modbus控制', false,
-        'modbus-menu-root', '1', NOW(), NOW()
+        'modbus-menu-root', '0', NOW(), NOW()
     ) RETURNING id
 ),
 -- 2. 创建二级菜单：设备管理
@@ -24,16 +24,16 @@ device_menu AS (
         "component_path", "redirect", "hidden", "keep_alive", "always_show", "title", "parent_id", "affix",
         "uuid", "status", "created_time", "updated_time"
     ) SELECT
-        '设备管理', 2, 1, 'module_modbus:device:query', 'ep:cpu', 'ModbusDevice', '/modbus/device',
+        '设备管理', 2, 1, 'module_modbus:device:query', 'el-icon-Cpu', 'ModbusDevice', '/modbus/device',
         'module_modbus/device/index', NULL, false, true, false, '设备管理', id, false,
-        'modbus-menu-device', '1', NOW(), NOW()
+        'modbus-menu-device', '0', NOW(), NOW()
     FROM modbus_menu
     RETURNING id
 ),
 -- 设备管理按钮权限
 device_perms AS (
     INSERT INTO "sys_menu" ("name", "type", "order", "permission", "parent_id", "uuid", "status", "hidden", "keep_alive", "always_show", "affix", "created_time", "updated_time")
-    SELECT perm.name, perm.type, perm.ord, perm.permission, dm.id, perm.uuid, '1', false, true, false, false, NOW(), NOW()
+    SELECT perm.name, perm.type, perm.ord, perm.permission, dm.id, perm.uuid, '0', false, true, false, false, NOW(), NOW()
     FROM device_menu dm
     CROSS JOIN (VALUES
         ('查询设备', 3, 1, 'module_modbus:device:query', 'modbus-perm-device-query'),
@@ -54,16 +54,16 @@ control_menu AS (
         "component_path", "redirect", "hidden", "keep_alive", "always_show", "title", "parent_id", "affix",
         "uuid", "status", "created_time", "updated_time"
     ) SELECT
-        'AI控制', 2, 2, 'module_modbus:control:query', 'ep:chat-dot-round', 'ModbusControl', '/modbus/control',
+        'AI控制', 2, 2, 'module_modbus:control:query', 'el-icon-ChatDotRound', 'ModbusControl', '/modbus/control',
         'module_modbus/control/index', NULL, false, false, false, 'AI控制', id, false,
-        'modbus-menu-control', '1', NOW(), NOW()
+        'modbus-menu-control', '0', NOW(), NOW()
     FROM modbus_menu
     RETURNING id
 ),
 -- 控制页面按钮权限
 control_perms AS (
     INSERT INTO "sys_menu" ("name", "type", "order", "permission", "parent_id", "uuid", "status", "hidden", "keep_alive", "always_show", "affix", "created_time", "updated_time")
-    SELECT perm.name, perm.type, perm.ord, perm.permission, cm.id, perm.uuid, '1', false, true, false, false, NOW(), NOW()
+    SELECT perm.name, perm.type, perm.ord, perm.permission, cm.id, perm.uuid, '0', false, true, false, false, NOW(), NOW()
     FROM control_menu cm
     CROSS JOIN (VALUES
         ('查询状态', 3, 1, 'module_modbus:control:query', 'modbus-perm-control-query'),
@@ -79,15 +79,15 @@ log_menu AS (
         "component_path", "redirect", "hidden", "keep_alive", "always_show", "title", "parent_id", "affix",
         "uuid", "status", "created_time", "updated_time"
     ) SELECT
-        '操作日志', 2, 3, 'module_modbus:log:query', 'ep:document', 'ModbusLog', '/modbus/log',
+        '操作日志', 2, 3, 'module_modbus:log:query', 'el-icon-Document', 'ModbusLog', '/modbus/log',
         'module_modbus/log/index', NULL, false, true, false, '操作日志', id, false,
-        'modbus-menu-log', '1', NOW(), NOW()
+        'modbus-menu-log', '0', NOW(), NOW()
     FROM modbus_menu
     RETURNING id
 )
 -- 操作日志按钮权限
 INSERT INTO "sys_menu" ("name", "type", "order", "permission", "parent_id", "uuid", "status", "hidden", "keep_alive", "always_show", "affix", "created_time", "updated_time")
-SELECT perm.name, perm.type, perm.ord, perm.permission, lm.id, perm.uuid, '1', false, true, false, false, NOW(), NOW()
+SELECT perm.name, perm.type, perm.ord, perm.permission, lm.id, perm.uuid, '0', false, true, false, false, NOW(), NOW()
 FROM log_menu lm
 CROSS JOIN (VALUES
     ('查看详情', 3, 1, 'module_modbus:log:detail', 'modbus-perm-log-detail')

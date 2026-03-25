@@ -1,4 +1,3 @@
-import { localStg } from "@/utils/storage";
 import request from "@/utils/request";
 
 const API_PATH = "/modbus/control";
@@ -140,7 +139,7 @@ const ControlAPI = {
     onEvent: (event: StreamEvent) => void,
     onError?: (error: Error) => void
   ) {
-    const token = localStg.get("token");
+    const token = localStorage.getItem("token");
     // 使用 Vite proxy，添加 /proxy-default 前缀
     const url = "/proxy-default/modbus/control/chat/stream";
     const controller = new AbortController();

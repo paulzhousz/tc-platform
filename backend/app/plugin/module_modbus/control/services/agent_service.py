@@ -1,7 +1,7 @@
 """
 LLM Agent 服务
 
-基于 LangChain 实现 PLC 控制的智能对话代理。
+基于 LangChain 1.x 实现 PLC 控制的智能对话代理。
 支持设备搜索、点位操作、消歧确认等功能。
 """
 
@@ -12,10 +12,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.agents import create_agent
 from langchain.tools import tool
-from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -241,22 +240,9 @@ class AgentService:
 
     def __init__(self, db: Session):
         self.db = db
-        self._llm = None
         self._agent = None
         self._tools = None
         self._current_session: Optional[AgentSessionModel] = None
-
-    @property
-    def llm(self):
-        """延迟初始化 LLM"""
-        if self._llm is None:
-            self._llm = ChatOpenAI(
-                base_url=settings.MODBUS_LLM_BASE_URL,
-                api_key=settings.MODBUS_LLM_API_KEY,
-                model=settings.MODBUS_LLM_MODEL_NAME,
-                temperature=settings.MODBUS_LLM_TEMPERATURE,
-            )
-        return self._llm
 
     def get_tools(self, user_id: int) -> list:
         """获取工具列表（绑定当前用户）"""
@@ -618,19 +604,25 @@ class AgentService:
 
         return self._tools
 
-    def create_agent(self, user_id: int):
-        """创建 Agent"""
+    def create_agent_graph(self, user_id: int):
+        """创建 Agent (LangChain 1.x 版本)"""
         tools = self.get_tools(user_id)
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM_PROMPT),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
+        # 使用 ChatOpenAI 实例
+        llm = ChatOpenAI(
+            base_url=settings.MODBUS_LLM_BASE_URL,
+            api_key=settings.MODBUS_LLM_API_KEY,
+            model=settings.MODBUS_LLM_MODEL_NAME,
+            temperature=settings.MODBUS_LLM_TEMPERATURE,
+        )
 
-        agent = create_tool_calling_agent(self.llm, tools, prompt)
-        return AgentExecutor(agent=agent, tools=tools, verbose=True)
+        # 使用 LangChain 1.x 的 create_agent API
+        agent = create_agent(
+            model=llm,
+            tools=tools,
+            system_prompt=SYSTEM_PROMPT,
+        )
+        return agent
 
     def _get_or_create_session(self, user_id: int, session_id: Optional[str] = None) -> AgentSessionModel:
         """获取或创建会话"""
@@ -778,7 +770,7 @@ class AgentService:
     async def chat(
         self, user_id: int, message: str, session_id: Optional[str] = None
     ) -> dict[str, Any]:
-        """处理对话（同步模式）"""
+        """处理对话（同步模式）- LangChain 1.x 版本"""
         logger.info(
             f"[Agent] 开始处理对话, user_id={user_id}, message={message}, session_id={session_id}"
         )
@@ -788,7 +780,7 @@ class AgentService:
 
         self._current_session = session
 
-        _processed_message, context_hint, should_clear_disambiguation, should_clear_pending = _preprocess_user_message(
+        _, context_hint, should_clear_disambiguation, should_clear_pending = _preprocess_user_message(
             session, message
         )
         if context_hint:
@@ -798,37 +790,43 @@ class AgentService:
         if should_clear_pending:
             self.clear_pending_confirmation(session)
 
-        agent_executor = self.create_agent(user_id)
+        agent_graph = self.create_agent_graph(user_id)
 
-        chat_history = self._build_chat_history(session)
+        # 构建消息列表
+        messages = self._build_chat_history(session)
 
         if context_hint:
-            chat_history.append(HumanMessage(content=context_hint))
-            chat_history.append(AIMessage(content="我理解了，会按照提示处理。"))
+            messages.append(HumanMessage(content=context_hint))
+            messages.append(AIMessage(content="我理解了，会按照提示处理。"))
+
+        # 添加当前用户消息
+        messages.append(HumanMessage(content=message))
 
         try:
-            logger.info("[Agent] 开始执行 AgentExecutor.invoke")
-            result = await agent_executor.ainvoke({
-                "input": message,
-                "chat_history": chat_history,
-            })
+            logger.info("[Agent] 开始执行 agent.invoke")
 
-            reply = result.get("output", "")
-            logger.info(f"[Agent] Agent 执行完成, reply={reply[:100]}...")
+            # LangChain 1.x 使用 messages 格式
+            result = await agent_graph.ainvoke({"messages": messages})
 
+            # 提取最终回复
+            reply = ""
             actions = []
-            intermediate_steps = result.get("intermediate_steps", [])
-            for step in intermediate_steps:
-                if len(step) >= 2:
-                    action = step[0]
-                    observation = step[1]
-                    tool_name = getattr(action, "tool", "unknown")
-                    tool_input = getattr(action, "tool_input", {}) or {}
+
+            result_messages = result.get("messages", [])
+            for msg in result_messages:
+                if isinstance(msg, AIMessage) and msg.content:
+                    reply = msg.content
+                elif isinstance(msg, ToolMessage):
+                    # 记录工具调用结果
+                    tool_name = getattr(msg, "name", "unknown")
                     actions.append({
                         "tool": tool_name,
-                        "args": tool_input,
-                        "result": str(observation)[:200] if observation else None,
+                        "args": {},
+                        "result": str(msg.content)[:200] if msg.content else None,
+                        "status": "success",
                     })
+
+            logger.info(f"[Agent] Agent 执行完成, reply={reply[:100] if reply else 'empty'}...")
 
             self._update_session(session, message, reply)
 
@@ -853,12 +851,12 @@ class AgentService:
     async def stream_chat(
         self, user_id: int, message: str, session_id: Optional[str] = None
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """流式处理对话"""
+        """流式处理对话 - LangChain 1.x 版本"""
         session = self._get_or_create_session(user_id, session_id)
 
         self._current_session = session
 
-        _processed_message, context_hint, should_clear_disambiguation, should_clear_pending = _preprocess_user_message(
+        _, context_hint, should_clear_disambiguation, should_clear_pending = _preprocess_user_message(
             session, message
         )
         if context_hint:
@@ -873,141 +871,145 @@ class AgentService:
             "session_id": session.session_id,
         }
 
-        agent_executor = self.create_agent(user_id)
+        agent_graph = self.create_agent_graph(user_id)
 
-        chat_history = self._build_chat_history(session)
+        # 构建消息列表
+        messages = self._build_chat_history(session)
 
         if context_hint:
-            chat_history.append(HumanMessage(content=context_hint))
-            chat_history.append(AIMessage(content="我理解了，会按照提示处理。"))
+            messages.append(HumanMessage(content=context_hint))
+            messages.append(AIMessage(content="我理解了，会按照提示处理。"))
+
+        # 添加当前用户消息
+        messages.append(HumanMessage(content=message))
 
         try:
             full_reply = ""
             actions = []
-            action_start_times = {}
-            action_args = {}
             should_stop = False
 
             logger.info(
                 f"[Agent Stream] 开始执行, user_id={user_id}, message={message}"
             )
 
-            async for event in agent_executor.astream_events({
-                "input": message,
-                "chat_history": chat_history,
-            }, version="v2"):
+            # LangChain 1.x 使用 stream 方法，stream_mode=["messages", "updates"]
+            async for stream_mode, data in agent_graph.astream(
+                {"messages": messages},
+                stream_mode=["messages", "updates"],
+            ):
                 if should_stop:
                     logger.info("[Agent Stream] 检测到需要用户交互，中断执行")
                     break
 
-                kind = event.get("event")
+                if stream_mode == "messages":
+                    token, metadata = data
+                    if isinstance(token, AIMessageChunk):
+                        # 处理流式文本
+                        if token.content:
+                            full_reply += token.content
+                            yield {
+                                "type": "token",
+                                "session_id": session.session_id,
+                                "content": token.content,
+                            }
+                        # 处理工具调用块
+                        if token.tool_call_chunks:
+                            for tc in token.tool_call_chunks:
+                                if tc.get("name"):
+                                    logger.info(f"[Agent Tool] 调用开始: {tc['name']}")
+                                    yield {
+                                        "type": "action_start",
+                                        "session_id": session.session_id,
+                                        "action": {
+                                            "tool": tc["name"],
+                                            "args": tc.get("args", {}),
+                                            "status": "running",
+                                            "started_at": datetime.now().isoformat(),
+                                        },
+                                    }
 
-                if kind == "on_tool_start":
-                    tool_name = event.get("name", "unknown")
-                    tool_input = event.get("data", {}).get("input", {})
-                    started_at = datetime.now()
-                    action_start_times[tool_name] = started_at
-                    action_args[tool_name] = tool_input
-                    logger.info(f"[Agent Tool] 调用开始: tool={tool_name}, args={tool_input}")
-                    yield {
-                        "type": "action_start",
-                        "session_id": session.session_id,
-                        "action": {
-                            "tool": tool_name,
-                            "args": tool_input,
-                            "status": "running",
-                            "started_at": started_at.isoformat(),
-                        },
-                    }
+                elif stream_mode == "updates":
+                    for source, update in data.items():
+                        if source == "tools" and update.get("messages"):
+                            # 处理工具返回
+                            tool_msg = update["messages"][-1]
+                            if isinstance(tool_msg, ToolMessage):
+                                tool_name = getattr(tool_msg, "name", "unknown")
+                                tool_output = tool_msg.content
+                                tool_input = tool_msg.tool_call_id or {}
 
-                elif kind == "on_tool_end":
-                    tool_name = event.get("name", "unknown")
-                    tool_output = event.get("data", {}).get("output", "")
-                    finished_at = datetime.now()
-                    started_at = action_start_times.pop(tool_name, None)
-                    tool_input = action_args.pop(tool_name, {})
-                    duration_ms = (
-                        int((finished_at - started_at).total_seconds() * 1000)
-                        if started_at
-                        else None
-                    )
+                                logger.info(
+                                    f"[Agent Tool] 调用完成: tool={tool_name}, result={str(tool_output)[:200]}"
+                                )
 
-                    logger.info(
-                        f"[Agent Tool] 调用完成: tool={tool_name}, result={str(tool_output)[:200]}"
-                    )
+                                output_str = str(tool_output) if tool_output else ""
+                                action_status = "success"
 
-                    output_str = str(tool_output) if tool_output else ""
-                    if output_str.startswith("DISAMBIGUATION_REQUIRED"):
-                        logger.info("[Agent Stream] 检测到消歧请求，设置中断标志")
-                        pending_user_action = output_str.replace(
-                            "DISAMBIGUATION_REQUIRED\n\n", ""
-                        ).replace("DISAMBIGUATION_REQUIRED\n", "")
-                        if "【重要】" in pending_user_action:
-                            pending_user_action = pending_user_action.split("【重要】")[0].strip()
-                        full_reply = pending_user_action
-                        action_status = "pending"
-                    elif output_str.startswith("CONFIRMATION_REQUIRED"):
-                        logger.info("[Agent Stream] 检测到确认请求，设置中断标志")
-                        pending_user_action = output_str.replace(
-                            "CONFIRMATION_REQUIRED\n\n", ""
-                        ).replace("CONFIRMATION_REQUIRED\n", "")
-                        if "【重要】" in pending_user_action:
-                            pending_user_action = pending_user_action.split("【重要】")[0].strip()
-                        full_reply = pending_user_action
-                        action_status = "pending"
-                    else:
-                        action_status = "success"
+                                if output_str.startswith("DISAMBIGUATION_REQUIRED"):
+                                    logger.info("[Agent Stream] 检测到消歧请求，设置中断标志")
+                                    pending_user_action = output_str.replace(
+                                        "DISAMBIGUATION_REQUIRED\n\n", ""
+                                    ).replace("DISAMBIGUATION_REQUIRED\n", "")
+                                    if "【重要】" in pending_user_action:
+                                        pending_user_action = pending_user_action.split("【重要】")[0].strip()
+                                    full_reply = pending_user_action
+                                    action_status = "pending"
+                                    should_stop = True
+                                elif output_str.startswith("CONFIRMATION_REQUIRED"):
+                                    logger.info("[Agent Stream] 检测到确认请求，设置中断标志")
+                                    pending_user_action = output_str.replace(
+                                        "CONFIRMATION_REQUIRED\n\n", ""
+                                    ).replace("CONFIRMATION_REQUIRED\n", "")
+                                    if "【重要】" in pending_user_action:
+                                        pending_user_action = pending_user_action.split("【重要】")[0].strip()
+                                    full_reply = pending_user_action
+                                    action_status = "pending"
+                                    should_stop = True
 
-                    parsed_data = None
-                    parsed_message = str(tool_output)[:200] if tool_output else None
-                    command_log_id = None
-                    if tool_output:
-                        try:
-                            parsed = json.loads(tool_output)
-                            parsed_data = parsed.get("data")
-                            parsed_message = parsed.get("message", parsed_message)
-                            command_log_id = parsed.get("command_log_id")
-                            if parsed.get("status") == "failed":
-                                action_status = "failed"
-                        except (json.JSONDecodeError, TypeError):
-                            pass
+                                parsed_data = None
+                                parsed_message = str(tool_output)[:200] if tool_output else None
+                                command_log_id = None
 
-                    actions.append({
-                        "tool": tool_name,
-                        "args": tool_input,
-                        "result": parsed_message,
-                        "status": action_status,
-                        "started_at": started_at.isoformat() if started_at else None,
-                        "finished_at": finished_at.isoformat(),
-                        "duration_ms": duration_ms,
-                        "data": parsed_data,
-                        "command_log_id": command_log_id,
-                    })
-                    yield {
-                        "type": "action_end",
-                        "session_id": session.session_id,
-                        "action": {
-                            "tool": tool_name,
-                            "args": tool_input,
-                            "result": parsed_message,
-                            "status": action_status,
-                            "duration_ms": duration_ms,
-                            "data": parsed_data,
-                            "command_log_id": command_log_id,
-                        },
-                    }
+                                if tool_output:
+                                    try:
+                                        parsed = json.loads(tool_output)
+                                        parsed_data = parsed.get("data")
+                                        parsed_message = parsed.get("message", parsed_message)
+                                        command_log_id = parsed.get("command_log_id")
+                                        if parsed.get("status") == "failed":
+                                            action_status = "failed"
+                                    except (json.JSONDecodeError, TypeError):
+                                        pass
 
-                elif kind == "on_chat_model_stream":
-                    if should_stop:
-                        continue
-                    chunk = event.get("data", {}).get("chunk")
-                    if chunk and hasattr(chunk, "content") and chunk.content:
-                        full_reply += chunk.content
-                        yield {
-                            "type": "token",
-                            "session_id": session.session_id,
-                            "content": chunk.content,
-                        }
+                                actions.append({
+                                    "tool": tool_name,
+                                    "args": tool_input if isinstance(tool_input, dict) else {},
+                                    "result": parsed_message,
+                                    "status": action_status,
+                                    "data": parsed_data,
+                                    "command_log_id": command_log_id,
+                                })
+
+                                yield {
+                                    "type": "action_end",
+                                    "session_id": session.session_id,
+                                    "action": {
+                                        "tool": tool_name,
+                                        "args": tool_input if isinstance(tool_input, dict) else {},
+                                        "result": parsed_message,
+                                        "status": action_status,
+                                        "data": parsed_data,
+                                        "command_log_id": command_log_id,
+                                    },
+                                }
+
+                        elif source == "model" and update.get("messages"):
+                            # 处理 AI 回复完成
+                            ai_msg = update["messages"][-1]
+                            if isinstance(ai_msg, AIMessage) and ai_msg.tool_calls:
+                                # 记录工具调用
+                                for tc in ai_msg.tool_calls:
+                                    logger.info(f"[Agent Tool] 工具调用: {tc}")
 
             self._update_session(session, message, full_reply)
             logger.info(

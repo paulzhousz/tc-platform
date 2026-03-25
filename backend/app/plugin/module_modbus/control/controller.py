@@ -7,7 +7,7 @@ Modbus 控制模块 API 控制器
 import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path as PathlibPath
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Path, Query, WebSocket
@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 # 快捷指令配置文件路径
 QUICK_COMMANDS_CONFIG_PATH = (
-    Path(__file__).parent.parent.parent.parent / "config" / "modbus_quick_commands.json"
+    PathlibPath(__file__).parent.parent.parent.parent / "config" / "modbus_quick_commands.json"
 )
 
 # ==================== 设备管理路由 ====================

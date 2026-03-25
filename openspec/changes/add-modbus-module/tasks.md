@@ -131,29 +131,29 @@
 
 ---
 
-## Phase 5: 前端页面组件 (P0)
+## Phase 5: 前端页面组件 (P0) ✅ 已完成
 
 > 依赖：Phase 4 完成
 
 ### 5.1 设备管理页面
-- [ ] 创建 `frontend/src/views/module_modbus/device/index.vue`
-- [ ] 实现设备列表表格
-- [ ] 实现设备 CRUD 弹窗
-- [ ] 实现点位管理抽屉
+- [x] 创建 `frontend/src/views/module_modbus/device/index.vue`
+- [x] 实现设备列表表格
+- [x] 实现设备 CRUD 弹窗
+- [x] 实现点位管理抽屉
 
 ### 5.2 控制页面
-- [ ] 创建 `frontend/src/views/module_modbus/control/index.vue`
-- [ ] 实现设备树组件（Element Plus el-tree）
-- [ ] 实现聊天面板
-- [ ] 实现消息列表（支持 Markdown 渲染）
-- [ ] 实现输入框（支持语音按钮）
-- [ ] 实现快捷指令按钮
-- [ ] 实现设备详情抽屉
+- [x] 创建 `frontend/src/views/module_modbus/control/index.vue`
+- [x] 实现设备树组件（Element Plus el-tree）
+- [x] 实现聊天面板
+- [x] 实现消息列表（支持 Markdown 渲染）
+- [x] 实现输入框（支持语音按钮）
+- [x] 实现快捷指令按钮
+- [x] 实现设备详情抽屉
 
 ### 5.3 操作日志页面
-- [ ] 创建 `frontend/src/views/module_modbus/log/index.vue`
-- [ ] 实现日志列表表格
-- [ ] 实现日志详情弹窗
+- [x] 创建 `frontend/src/views/module_modbus/log/index.vue`
+- [x] 实现日志列表表格
+- [x] 实现日志详情弹窗
 
 ---
 
@@ -167,7 +167,7 @@
 - [x] 实现中断生成功能（已实现 abortGeneration）
 
 ### 6.2 语音输入
-- [ ] 实现 AudioWorklet 处理器（需要 audio-processor.js）
+- [x] 实现 AudioWorklet 处理器（已创建 audio-processor.js）
 - [x] 实现 FunASR WebSocket 连接（已实现）
 - [x] 实现实时识别结果预览（已实现）
 - [x] 实现自动静音检测（已实现）

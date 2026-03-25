@@ -227,24 +227,6 @@ const ControlAPI = {
     });
   },
 
-  /** 调整 PLC 点位 */
-  adjust(data: AdjustRequest) {
-    return request<
-      ApiResponse<{
-        success: boolean;
-        previous_value?: number;
-        value?: number;
-        delta?: number;
-        unit?: string;
-        message?: string;
-      }>
-    >({
-      url: `${API_PATH}/adjust`,
-      method: "post",
-      data,
-    });
-  },
-
   /** 获取快捷指令配置 */
   getQuickCommands() {
     return request<ApiResponse<{ quick_commands: QuickCommand[] }>>({
@@ -318,10 +300,4 @@ export interface WriteRequest {
   device_id: number;
   tag_name: string;
   value: number;
-}
-
-export interface AdjustRequest {
-  device_id: number;
-  tag_name: string;
-  delta: number;
 }

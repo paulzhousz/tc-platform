@@ -1,6 +1,6 @@
 import request from "@/utils/request";
 
-const API_PATH = "/modbus/logs";
+const API_PATH = "/modbus/log";
 
 // ==================== Types ====================
 
@@ -33,7 +33,7 @@ const LogAPI = {
   /** 获取操作日志列表 */
   getList(params?: LogListParams) {
     return request<ApiResponse<LogListResult>>({
-      url: API_PATH,
+      url: `${API_PATH}/list`,
       method: "get",
       params,
     });
@@ -42,7 +42,7 @@ const LogAPI = {
   /** 获取操作日志详情 */
   getDetail(logId: number) {
     return request<ApiResponse<CommandLog>>({
-      url: `${API_PATH}/${logId}`,
+      url: `${API_PATH}/detail/${logId}`,
       method: "get",
     });
   },

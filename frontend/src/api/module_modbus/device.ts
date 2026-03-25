@@ -65,7 +65,7 @@ const DeviceAPI = {
   /** 获取设备详情 */
   getDetail(deviceId: number) {
     return request<ApiResponse<Device>>({
-      url: `${API_PATH}/device/${deviceId}`,
+      url: `${API_PATH}/device/detail/${deviceId}`,
       method: "get",
     });
   },
@@ -73,7 +73,7 @@ const DeviceAPI = {
   /** 创建设备 */
   create(data: DeviceCreateData) {
     return request<ApiResponse<Device>>({
-      url: `${API_PATH}/device`,
+      url: `${API_PATH}/device/create`,
       method: "post",
       data,
     });
@@ -82,7 +82,7 @@ const DeviceAPI = {
   /** 更新设备 */
   update(deviceId: number, data: DeviceUpdateData) {
     return request<ApiResponse<Device>>({
-      url: `${API_PATH}/device/${deviceId}`,
+      url: `${API_PATH}/device/update/${deviceId}`,
       method: "put",
       data,
     });
@@ -91,15 +91,16 @@ const DeviceAPI = {
   /** 删除设备 */
   delete(deviceId: number) {
     return request<ApiResponse<{ message: string }>>({
-      url: `${API_PATH}/device/${deviceId}`,
+      url: `${API_PATH}/device/delete`,
       method: "delete",
+      params: { id: deviceId },
     });
   },
 
   /** 获取设备点位列表 */
   getTags(deviceId: number, params?: TagPointListParams) {
     return request<ApiResponse<TagPointListResult>>({
-      url: `${API_PATH}/device/${deviceId}/tags`,
+      url: `${API_PATH}/device/${deviceId}/tag/list`,
       method: "get",
       params,
     });
@@ -108,7 +109,7 @@ const DeviceAPI = {
   /** 创建点位 */
   createTag(deviceId: number, data: TagPointCreateData) {
     return request<ApiResponse<TagPoint>>({
-      url: `${API_PATH}/device/${deviceId}/tags`,
+      url: `${API_PATH}/device/${deviceId}/tag/create`,
       method: "post",
       data,
     });
@@ -117,7 +118,7 @@ const DeviceAPI = {
   /** 更新点位 */
   updateTag(tagId: number, data: TagPointUpdateData) {
     return request<ApiResponse<TagPoint>>({
-      url: `${API_PATH}/device/tags/${tagId}`,
+      url: `${API_PATH}/device/tag/update/${tagId}`,
       method: "put",
       data,
     });
@@ -126,8 +127,9 @@ const DeviceAPI = {
   /** 删除点位 */
   deleteTag(tagId: number) {
     return request<ApiResponse<{ message: string }>>({
-      url: `${API_PATH}/device/tags/${tagId}`,
+      url: `${API_PATH}/device/tag/delete`,
       method: "delete",
+      params: { id: tagId },
     });
   },
 };

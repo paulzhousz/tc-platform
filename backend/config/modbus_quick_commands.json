@@ -1,0 +1,59 @@
+{
+  "quick_commands": [
+    {
+      "id": "view_status",
+      "label": {
+        "zh": "查看状态",
+        "en": "View Status"
+      },
+      "text": {
+        "zh": "查看所有设备状态",
+        "en": "View all device status"
+      }
+    },
+    {
+      "id": "temperature",
+      "label": {
+        "zh": "温度",
+        "en": "Temperature"
+      },
+      "text": {
+        "zh": "读取温度值",
+        "en": "Read temperature value"
+      }
+    },
+    {
+      "id": "set_frequency",
+      "label": {
+        "zh": "设置频率",
+        "en": "Set Frequency"
+      },
+      "text": {
+        "zh": "设置频率为30Hz",
+        "en": "Set frequency to 30Hz"
+      }
+    },
+    {
+      "id": "start_device",
+      "label": {
+        "zh": "启动设备",
+        "en": "Start Device"
+      },
+      "text": {
+        "zh": "启动当前设备",
+        "en": "Start current device"
+      }
+    },
+    {
+      "id": "stop_device",
+      "label": {
+        "zh": "停止设备",
+        "en": "Stop Device"
+      },
+      "text": {
+        "zh": "停止当前设备",
+        "en": "Stop current device"
+      }
+    }
+  ]
+}

@@ -50,8 +50,13 @@ def mock_auth(mock_user):
 @pytest.fixture
 def mock_auth_dependency(mock_auth):
     """Mock AuthPermission 依赖"""
+    # AuthPermission([...]) 返回一个 async callable
+    # 需要让这个 callable 返回 mock_auth
+    async def async_callable(*args, **kwargs):
+        return mock_auth
+
     with patch("app.plugin.module_modbus.control.controller.AuthPermission") as mock:
-        mock.return_value = mock_auth
+        mock.return_value = async_callable
         yield mock_auth
 
 

@@ -106,28 +106,28 @@
 
 ---
 
-## Phase 4: 前端基础设施 (P0)
+## Phase 4: 前端基础设施 (P0) ✅ 已完成
 
 > 依赖：Phase 3 完成
 
 ### 4.1 API 层
-- [ ] 创建 `frontend/src/api/module_modbus/device.ts`
-- [ ] 创建 `frontend/src/api/module_modbus/control.ts`
-- [ ] 创建 `frontend/src/api/module_modbus/log.ts`
-- [ ] 创建 `frontend/src/api/module_modbus/index.ts` - 导出
+- [x] 创建 `frontend/src/api/module_modbus/device.ts`
+- [x] 创建 `frontend/src/api/module_modbus/control.ts`
+- [x] 创建 `frontend/src/api/module_modbus/log.ts`
+- [x] 创建 `frontend/src/api/module_modbus/index.ts` - 导出
 
 ### 4.2 状态管理
-- [ ] 创建 `frontend/src/store/modules/modbus/index.ts`
-  - [ ] devices, tagPoints 状态
-  - [ ] messages, sessionId 状态
-  - [ ] chatHistory 状态
-  - [ ] loadDevices, loadTagPoints actions
-  - [ ] sendMessage, sendMessageStream actions
-  - [ ] WebSocket 状态管理
+- [x] 创建 `frontend/src/store/modules/modbus.store.ts`
+  - [x] devices, tagPoints 状态
+  - [x] messages, sessionId 状态
+  - [x] chatHistory 状态
+  - [x] loadDevices, loadTagPoints actions
+  - [x] sendMessage, sendMessageStream actions
+  - [x] WebSocket 状态管理
 
 ### 4.3 组合式函数
-- [ ] 创建 `frontend/src/composables/modbus/use-modbus-ws.ts`
-- [ ] 创建 `frontend/src/composables/modbus/use-funasr-ws.ts`
+- [x] 创建 `frontend/src/composables/modbus/use-modbus-ws.ts`
+- [x] 创建 `frontend/src/composables/modbus/use-funasr-ws.ts`
 
 ---
 
@@ -162,20 +162,20 @@
 > 依赖：Phase 5 完成
 
 ### 6.1 流式对话
-- [ ] 实现 SSE 客户端逻辑
+- [x] 实现 SSE 客户端逻辑（已在 control.ts 实现）
 - [ ] 实现打字机效果
-- [ ] 实现中断生成功能
+- [x] 实现中断生成功能（已实现 abortGeneration）
 
 ### 6.2 语音输入
-- [ ] 实现 AudioWorklet 处理器
-- [ ] 实现 FunASR WebSocket 连接
-- [ ] 实现实时识别结果预览
-- [ ] 实现自动静音检测
+- [ ] 实现 AudioWorklet 处理器（需要 audio-processor.js）
+- [x] 实现 FunASR WebSocket 连接（已实现）
+- [x] 实现实时识别结果预览（已实现）
+- [x] 实现自动静音检测（已实现）
 
 ### 6.3 WebSocket 实时通信
-- [ ] 实现 WebSocket 连接管理
-- [ ] 实现设备状态实时更新
-- [ ] 实现断线重连机制
+- [x] 实现 WebSocket 连接管理（已实现）
+- [x] 实现设备状态实时更新（已实现）
+- [x] 实现断线重连机制（已实现）
 
 ---
 

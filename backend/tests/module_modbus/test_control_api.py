@@ -25,13 +25,13 @@ class TestConnectAPI:
     ):
         """测试连接所有设备 - 成功"""
         # Mock 查询返回活跃设备
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_device_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_device_model]
 
         response = client.post(f"{API_PREFIX}/connect")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "成功" in data["msg"]
 
     def test_connect_specific_devices(
@@ -43,18 +43,18 @@ class TestConnectAPI:
         mock_device_model
     ):
         """测试连接指定设备"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_device_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_device_model]
 
         response = client.post(f"{API_PREFIX}/connect", json=[1, 2])
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
 
     def test_connect_no_devices(self, client, mock_auth_dependency, mock_auth):
         """测试连接 - 没有可连接的设备"""
         # Mock 返回空列表
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = []
+        mock_auth._execute_result.scalars.return_value.all.return_value = []
 
         response = client.post(f"{API_PREFIX}/connect")
 
@@ -72,7 +72,7 @@ class TestConnectAPI:
         mock_device_model
     ):
         """测试连接 - 部分设备连接失败"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_device_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_device_model]
 
         # Mock 连接池抛出异常
         mock_connection_pool.add_device.side_effect = ConnectionError("连接超时")
@@ -97,13 +97,13 @@ class TestDisconnectAPI:
         mock_device_model
     ):
         """测试断开指定设备"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         response = client.post(f"{API_PREFIX}/disconnect", json=[1, 2])
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "断开" in data["msg"]
 
     def test_disconnect_all_devices(
@@ -115,13 +115,13 @@ class TestDisconnectAPI:
         mock_device_model
     ):
         """测试断开所有设备"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_device_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_device_model]
 
         response = client.post(f"{API_PREFIX}/disconnect")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "断开" in data["msg"]
 
 
@@ -137,13 +137,13 @@ class TestConnectionStatusAPI:
         mock_device_model
     ):
         """测试获取连接状态 - 成功"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_device_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_device_model]
 
         response = client.get(f"{API_PREFIX}/connection-status")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert isinstance(data["data"], list)
 
     def test_get_connection_status_empty(
@@ -153,13 +153,13 @@ class TestConnectionStatusAPI:
         mock_auth
     ):
         """测试获取连接状态 - 无活跃设备"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = []
+        mock_auth._execute_result.scalars.return_value.all.return_value = []
 
         response = client.get(f"{API_PREFIX}/connection-status")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert data["data"] == []
 
 
@@ -193,7 +193,7 @@ class TestChatAPI:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["code"] == 200
+            assert data["code"] == 0
             assert "reply" in data["data"]
 
     def test_chat_with_session_id(
@@ -222,7 +222,7 @@ class TestChatAPI:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["code"] == 200
+            assert data["code"] == 0
 
     def test_chat_empty_message(
         self,
@@ -295,7 +295,7 @@ class TestReadPLC:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["code"] == 200
+            assert data["code"] == 0
             assert data["data"]["value"] == 25.5
 
     def test_read_plc_failed(
@@ -350,7 +350,7 @@ class TestWritePLC:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["code"] == 200
+            assert data["code"] == 0
 
     def test_write_plc_requires_confirmation(
         self,
@@ -376,7 +376,7 @@ class TestWritePLC:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["code"] == 200
+            assert data["code"] == 0
             assert data["data"]["requires_confirmation"] is True
 
 
@@ -405,7 +405,7 @@ class TestQuickCommandsAPI:
 
                     assert response.status_code == 200
                     data = response.json()
-                    assert data["code"] == 200
+                    assert data["code"] == 0
 
     def test_get_quick_commands_file_not_found(
         self,
@@ -421,7 +421,7 @@ class TestQuickCommandsAPI:
 
             assert response.status_code == 200
             data = response.json()
-            assert data["code"] == 200
+            assert data["code"] == 0
             assert data["data"]["quick_commands"] == []
 
 
@@ -445,7 +445,7 @@ class TestChatHistoryAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "items" in data["data"]
 
     def test_get_chat_history_detail(
@@ -456,13 +456,13 @@ class TestChatHistoryAPI:
         mock_chat_history_model
     ):
         """测试获取聊天历史详情"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_chat_history_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_chat_history_model
 
         response = client.get(f"{API_PREFIX}/chat-history/session-123")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert data["data"]["session_id"] == "session-123"
 
     def test_save_chat_history(
@@ -486,7 +486,7 @@ class TestChatHistoryAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "session_id" in data["data"]
 
     def test_delete_chat_history(
@@ -497,13 +497,13 @@ class TestChatHistoryAPI:
         mock_chat_history_model
     ):
         """测试删除聊天历史"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_chat_history_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_chat_history_model
 
         response = client.delete(f"{API_PREFIX}/chat-history/session-123")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "删除" in data["msg"]
 
     def test_clear_all_chat_history(
@@ -515,11 +515,11 @@ class TestChatHistoryAPI:
         """测试清空所有聊天历史"""
         mock_result = MagicMock()
         mock_result.rowcount = 5
-        mock_auth.db.execute.return_value = mock_result
+        mock_auth._execute_result = mock_result
 
         response = client.delete(f"{API_PREFIX}/chat-history")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "清空" in data["msg"]

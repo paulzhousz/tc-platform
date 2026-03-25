@@ -18,37 +18,37 @@ class TestPendingListAPI:
     def test_list_pending_success(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试获取待确认列表 - 正常"""
         mock_pending_model.status = "pending"
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_pending_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_pending_model]
 
         response = client.get(f"{API_PREFIX}/list")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "items" in data["data"]
         assert len(data["data"]["items"]) == 1
 
     def test_list_pending_filter_by_status(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试获取待确认列表 - 按状态筛选"""
         mock_pending_model.status = "confirmed"
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_pending_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_pending_model]
 
         response = client.get(f"{API_PREFIX}/list?status=confirmed")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert len(data["data"]["items"]) == 1
 
     def test_list_pending_empty(self, client, mock_auth_dependency, mock_auth):
         """测试获取待确认列表 - 空列表"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = []
+        mock_auth._execute_result.scalars.return_value.all.return_value = []
 
         response = client.get(f"{API_PREFIX}/list")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert len(data["data"]["items"]) == 0
         assert data["data"]["total"] == 0
 
@@ -92,12 +92,12 @@ class TestConfirmOperationAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "成功" in data["msg"]
 
     def test_confirm_operation_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试确认操作 - 记录不存在"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = None
+        mock_auth._execute_result.scalar_one_or_none.return_value = None
 
         response = client.post(f"{API_PREFIX}/999/confirm", json={"comment": "确认"})
 
@@ -109,7 +109,7 @@ class TestConfirmOperationAPI:
     def test_confirm_operation_already_processed(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试确认操作 - 已处理状态"""
         mock_pending_model.status = "confirmed"
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_pending_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
 
         response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
 
@@ -122,7 +122,7 @@ class TestConfirmOperationAPI:
         """测试确认操作 - 操作已过期"""
         mock_pending_model.status = "pending"
         mock_pending_model.expires_at = datetime.now() - timedelta(hours=1)  # 已过期
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_pending_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
 
         response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
 
@@ -226,18 +226,18 @@ class TestRejectOperationAPI:
     def test_reject_operation_success(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试拒绝操作 - 正常拒绝"""
         mock_pending_model.status = "pending"
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_pending_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
 
         response = client.post(f"{API_PREFIX}/1/reject", json={"comment": "拒绝执行"})
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "拒绝" in data["msg"]
 
     def test_reject_operation_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试拒绝操作 - 记录不存在"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = None
+        mock_auth._execute_result.scalar_one_or_none.return_value = None
 
         response = client.post(f"{API_PREFIX}/999/reject", json={"comment": "拒绝"})
 
@@ -249,7 +249,7 @@ class TestRejectOperationAPI:
     def test_reject_operation_already_processed(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试拒绝操作 - 已处理状态"""
         mock_pending_model.status = "rejected"
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_pending_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
 
         response = client.post(f"{API_PREFIX}/1/reject", json={"comment": "拒绝"})
 

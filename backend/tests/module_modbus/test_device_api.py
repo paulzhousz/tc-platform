@@ -16,24 +16,24 @@ class TestDeviceListAPI:
 
     def test_list_devices_success(self, client, mock_auth_dependency, mock_auth):
         """测试获取设备列表 - 正常"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = []
+        mock_auth._execute_result.scalars.return_value.all.return_value = []
 
         response = client.get(f"{API_PREFIX}/list")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "items" in data["data"]
 
     def test_list_devices_with_data(self, client, mock_auth_dependency, mock_auth, mock_device_model):
         """测试获取设备列表 - 有数据"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_device_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_device_model]
 
         response = client.get(f"{API_PREFIX}/list")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert len(data["data"]["items"]) == 1
         assert data["data"]["items"][0]["name"] == "测试PLC"
 
@@ -51,13 +51,13 @@ class TestDeviceCreateAPI:
     ):
         """测试创建设备 - 正常"""
         # Mock 无重复设备
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = None
+        mock_auth._execute_result.scalar_one_or_none.return_value = None
 
         response = client.post(f"{API_PREFIX}/create", json=sample_device_data)
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert data["msg"] == "创建设备成功"
 
     def test_create_device_duplicate_code(
@@ -69,7 +69,7 @@ class TestDeviceCreateAPI:
         mock_device_model
     ):
         """测试创建设备 - 编码重复"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         response = client.post(f"{API_PREFIX}/create", json=sample_device_data)
 
@@ -111,18 +111,18 @@ class TestDeviceDetailAPI:
 
     def test_get_device_success(self, client, mock_auth_dependency, mock_auth, mock_device_model):
         """测试获取设备详情 - 正常"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         response = client.get(f"{API_PREFIX}/detail/1")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert data["data"]["name"] == "测试PLC"
 
     def test_get_device_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试获取设备详情 - 设备不存在"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = None
+        mock_auth._execute_result.scalar_one_or_none.return_value = None
 
         response = client.get(f"{API_PREFIX}/detail/999")
 
@@ -144,18 +144,18 @@ class TestDeviceUpdateAPI:
         mock_device_model
     ):
         """测试更新设备 - 正常"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         update_data = {"name": "更新后的设备"}
         response = client.put(f"{API_PREFIX}/update/1", json=update_data)
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
 
     def test_update_device_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试更新设备 - 设备不存在"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = None
+        mock_auth._execute_result.scalar_one_or_none.return_value = None
 
         response = client.put(f"{API_PREFIX}/update/999", json={"name": "更新"})
 
@@ -173,7 +173,7 @@ class TestDeviceUpdateAPI:
         mock_device_model
     ):
         """测试更新设备 - 部分字段"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         response = client.put(f"{API_PREFIX}/update/1", json={"description": "新描述"})
 
@@ -192,13 +192,13 @@ class TestDeviceDeleteAPI:
         mock_device_model
     ):
         """测试删除设备 - 正常"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         response = client.request("DELETE", f"{API_PREFIX}/delete", json=[1])
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert "删除" in data["msg"]
 
 
@@ -214,7 +214,7 @@ class TestDeviceConnectionTestAPI:
         mock_device_model
     ):
         """测试设备连接 - 成功"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
 
         # Mock 连接成功
         mock_client = MagicMock()
@@ -236,7 +236,7 @@ class TestDeviceConnectionTestAPI:
         mock_device_model
     ):
         """测试设备连接 - 失败"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_device_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_device_model
         mock_connection_pool.acquire.return_value = None
 
         response = client.post(f"{API_PREFIX}/1/test")
@@ -247,7 +247,7 @@ class TestDeviceConnectionTestAPI:
 
     def test_test_connection_device_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试设备连接 - 设备不存在"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = None
+        mock_auth._execute_result.scalar_one_or_none.return_value = None
 
         response = client.post(f"{API_PREFIX}/999/test")
 
@@ -261,13 +261,13 @@ class TestTagAPI:
 
     def test_list_tags_success(self, client, mock_auth_dependency, mock_auth, mock_tag_model):
         """测试获取点位列表 - 正常"""
-        mock_auth.db.execute.return_value.scalars.return_value.all.return_value = [mock_tag_model]
+        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_tag_model]
 
         response = client.get(f"{API_PREFIX}/1/tag/list")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
         assert len(data["data"]["items"]) == 1
 
     def test_create_tag_success(
@@ -289,7 +289,7 @@ class TestTagAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
 
     def test_create_tag_duplicate_code(
         self,
@@ -315,20 +315,20 @@ class TestTagAPI:
 
     def test_update_tag_success(self, client, mock_auth_dependency, mock_auth, mock_tag_model):
         """测试更新点位 - 正常"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_tag_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_tag_model
 
         response = client.put(f"{API_PREFIX}/tag/update/1", json={"name": "新名称"})
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0
 
     def test_delete_tags_success(self, client, mock_auth_dependency, mock_auth, mock_tag_model):
         """测试删除点位 - 正常"""
-        mock_auth.db.execute.return_value.scalar_one_or_none.return_value = mock_tag_model
+        mock_auth._execute_result.scalar_one_or_none.return_value = mock_tag_model
 
         response = client.request("DELETE", f"{API_PREFIX}/tag/delete", json=[1])
 
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 0

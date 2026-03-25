@@ -58,8 +58,9 @@ from app.plugin.module_modbus.schemas import (
 logger = logging.getLogger(__name__)
 
 # 快捷指令配置文件路径
+# controller.py -> control -> module_modbus -> plugin -> app -> backend/
 QUICK_COMMANDS_CONFIG_PATH = (
-    PathlibPath(__file__).parent.parent.parent.parent / "config" / "modbus_quick_commands.json"
+    PathlibPath(__file__).parent.parent.parent.parent.parent / "config" / "modbus_quick_commands.json"
 )
 
 # ==================== 设备管理路由 ====================

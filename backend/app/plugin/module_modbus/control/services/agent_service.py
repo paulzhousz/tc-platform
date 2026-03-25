@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 
 def load_system_prompt() -> str:
     """从配置文件加载系统提示词"""
-    prompt_path = Path(__file__).parent.parent.parent.parent / "config" / "modbus_system_prompt.md"
+    # agent_service.py -> services -> control -> module_modbus -> plugin -> app -> backend/
+    prompt_path = Path(__file__).parent.parent.parent.parent.parent.parent / "config" / "modbus_system_prompt.md"
     try:
         with open(prompt_path, "r", encoding="utf-8") as f:
             content = f.read()

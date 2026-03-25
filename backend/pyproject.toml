@@ -27,6 +27,7 @@ dependencies = [
     "langchain==1.2.0",                         # 大模型
     "langchain-anthropic==1.3.0",               # 大模型 anthropic 适配器
     "langchain-chroma==1.1.0",
+    "langchain-core>=1.2.7",
     "langchain-mcp-adapters==0.2.1",            # 大模型 mcp 适配器
     "langchain-openai==1.1.6",                  # 大模型 openai 适配器
     "loguru==0.7.3",                            # 日志

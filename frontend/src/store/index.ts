@@ -20,6 +20,7 @@ export * from "./modules/user.store";
 export * from "./modules/dict.store";
 export * from "./modules/config.store";
 export * from "./modules/notice.store";
+export * from "./modules/modbus.store";
 export { store };
 
 // ------------------------------

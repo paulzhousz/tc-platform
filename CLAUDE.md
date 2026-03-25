@@ -102,6 +102,36 @@ return ErrorResponse(msg="操作失败")
 
 **注意**: SQL 导入和 Alembic 迁移是互斥的初始化方式。
 
+## Docker 数据库操作
+
+数据库（PostgreSQL、Redis）运行在 Docker 容器中。
+
+### 查看数据库容器
+
+```bash
+docker ps | grep -E 'postgres|redis'
+```
+
+### 执行 SQL 文件
+
+```bash
+# 使用 docker exec 执行 psql
+docker exec -i <postgres_container_name> psql -U root -d tc-platform < backend/path/to/file.sql
+
+# 示例：执行模块菜单初始化
+docker exec -i tc-platform-postgres psql -U root -d tc-platform < backend/app/plugin/module_modbus/init_menu.sql
+```
+
+### 连接数据库交互式终端
+
+```bash
+# PostgreSQL
+docker exec -it <postgres_container_name> psql -U root -d tc-platform
+
+# Redis
+docker exec -it <redis_container_name> redis-cli -a <password>
+```
+
 ## 技术栈版本
 
 | 层级 | 技术 | 版本 |

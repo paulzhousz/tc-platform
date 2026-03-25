@@ -9,6 +9,7 @@ import { DeviceAPI, ControlAPI } from "@/api/module_modbus";
 import type { Device, TagPoint, ActionStep } from "@/api/module_modbus";
 import { useModbusWs } from "@/composables/modbus/use-modbus-ws";
 import { useFunASRWs } from "@/composables/modbus/use-funasr-ws";
+import { useTypewriter } from "@/composables/modbus/use-typewriter";
 import { Icon } from "@iconify/vue";
 
 const modbusStore = useModbusStore();
@@ -20,6 +21,9 @@ const disconnecting = ref(false);
 
 // WebSocket 连接
 const { connect: connectWs, disconnect: disconnectWs } = useModbusWs();
+
+// 打字机效果
+const { cursorVisible } = useTypewriter(() => modbusStore.chatLoading);
 
 // 设备树数据
 const selectedKeys = ref<number[]>([]);
@@ -946,11 +950,19 @@ onMounted(async () => {
                   </div>
 
                   <!-- 回复内容 -->
-                  <div
-                    v-if="msg.content"
-                    class="message-content markdown-body"
-                    v-html="renderMarkdown(msg.content)"
-                  ></div>
+                  <div class="message-content-wrapper">
+                    <div
+                      v-if="msg.content"
+                      class="message-content markdown-body"
+                      v-html="renderMarkdown(msg.content)"
+                    ></div>
+                    <!-- 打字机光标 -->
+                    <span
+                      v-if="modbusStore.chatLoading && index === modbusStore.messages.length - 1"
+                      class="typewriter-cursor"
+                      :class="{ hidden: !cursorVisible }"
+                    ></span>
+                  </div>
 
                   <!-- 消息操作按钮 -->
                   <div v-if="msg.content" class="message-actions">
@@ -1758,6 +1770,26 @@ onMounted(async () => {
     padding-left: 12px;
     margin: 0.5em 0;
     color: #666;
+  }
+}
+
+// 消息内容包装器（用于光标定位）
+.message-content-wrapper {
+  display: inline;
+}
+
+// 打字机光标样式
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background-color: var(--el-color-primary);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  transition: opacity 0.1s;
+
+  &.hidden {
+    opacity: 0;
   }
 }
 

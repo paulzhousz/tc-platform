@@ -22,21 +22,21 @@ const filterParams = reactive({
 const dateRange = ref<[Date, Date] | null>(null);
 
 const pagination = reactive({
-  current: 1,
+  page_no: 1,
   pageSize: 20,
   total: 0,
   pageSizes: [10, 20, 50, 100],
 });
 
 // 状态颜色
-function getStatusType(status: string): "" | "success" | "danger" | "warning" | "info" {
-  const types: Record<string, "" | "success" | "danger" | "warning" | "info"> = {
+function getStatusType(status: string): "primary" | "success" | "danger" | "warning" | "info" {
+  const types: Record<string, "primary" | "success" | "danger" | "warning" | "info"> = {
     success: "success",
     failed: "danger",
     pending: "warning",
     cancelled: "info",
   };
-  return types[status] || "";
+  return types[status] || "info";
 }
 
 // 状态文本
@@ -88,7 +88,7 @@ async function loadLogs() {
   try {
     const result = await LogAPI.getList({
       ...filterParams,
-      page: pagination.current,
+      page_no: pagination.page_no,
       page_size: pagination.pageSize,
     });
     logs.value = result.data.data?.items || [];
@@ -114,7 +114,7 @@ function resetFilter() {
   filterParams.start_time = undefined;
   filterParams.end_time = undefined;
   dateRange.value = null;
-  pagination.current = 1;
+  pagination.page_no = 1;
   loadLogs();
 }
 
@@ -129,18 +129,18 @@ function onDateChange(dates: [Date, Date] | null) {
 }
 
 function handleQuery() {
-  pagination.current = 1;
+  pagination.page_no = 1;
   loadLogs();
 }
 
 function handleSizeChange(size: number) {
   pagination.pageSize = size;
-  pagination.current = 1;
+  pagination.page_no = 1;
   loadLogs();
 }
 
 function handleCurrentChange(page: number) {
-  pagination.current = page;
+  pagination.page_no = page;
   loadLogs();
 }
 
@@ -165,7 +165,7 @@ function exportLogs() {
     log.actual_value ?? "",
     log.status,
     log.execution_time ?? "",
-    formatTime(log.created_at),
+    formatTime(log.created_time),
   ]);
 
   const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
@@ -301,9 +301,9 @@ onMounted(() => {
               <span v-else>-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" min-width="160">
+          <el-table-column prop="created_time" label="创建时间" min-width="160">
             <template #default="{ row }">
-              {{ formatTime(row.created_at) }}
+              {{ formatTime(row.created_time) }}
             </template>
           </el-table-column>
           <el-table-column fixed="right" label="操作" align="center" width="100">
@@ -318,7 +318,7 @@ onMounted(() => {
         <!-- 分页 -->
         <div class="pagination-container">
           <el-pagination
-            v-model:current-page="pagination.current"
+            v-model:current-page="pagination.page_no"
             v-model:page-size="pagination.pageSize"
             :page-sizes="pagination.pageSizes"
             :total="pagination.total"
@@ -376,7 +376,7 @@ onMounted(() => {
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间">
-            {{ formatTime(currentLog.created_at) }}
+            {{ formatTime(currentLog.created_time) }}
           </el-descriptions-item>
           <el-descriptions-item label="执行时间">
             {{ formatTime(currentLog.executed_at) }}

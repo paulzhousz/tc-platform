@@ -46,7 +46,7 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
     serverUrl = getDefaultFunASRUrl(),
     onResult,
     onError,
-    silenceThreshold = 0.01,
+    silenceThreshold = 0.03,  // 提高阈值，避免环境噪音触发
     silenceDuration = 1.5,
   } = options;
 
@@ -56,10 +56,8 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
   const tempResult = ref("");
   const finalResult = ref("");
 
-  // 累积的识别文本（2pass 模式需要累积）
+  // 累积的识别文本（2pass-offline 修正后的结果）
   let accumulatedText = "";
-  // 当前句子的起始时间戳（用于判断是否是新句子）
-  let currentSentenceStart = -1;
 
   // 静音检测配置（可动态更新）
   const silenceConfig = {
@@ -111,37 +109,23 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
 
               if (data.is_final === true) {
                 // 最终结束信号
-                if (accumulatedText) {
-                  finalResult.value = accumulatedText;
-                  onResult?.(accumulatedText, true);
-                  console.log("语音识别完成:", accumulatedText);
+                // 使用 accumulatedText 或 tempResult 作为最终结果
+                const finalText = accumulatedText || tempResult.value;
+                if (finalText) {
+                  finalResult.value = finalText;
+                  onResult?.(finalText, true);
+                  console.log("语音识别完成:", finalText);
                 }
                 tempResult.value = "";
               } else if (data.text) {
                 // 识别结果
-                if (
-                  data.mode === "2pass-offline" &&
-                  data.stamp_sents &&
-                  data.stamp_sents.length > 0
-                ) {
-                  // 2pass-offline: 离线修正结果
-                  const validStamp = data.stamp_sents.find((s) => s.start >= 0);
-                  const newStart = validStamp ? validStamp.start : -1;
-
-                  if (newStart >= 0 && newStart !== currentSentenceStart) {
-                    // 新句子开始，直接追加到累积文本
-                    accumulatedText += data.text;
-                    currentSentenceStart = newStart;
-                  } else {
-                    // 同一句子的更新
-                    if (newStart < 0 && currentSentenceStart >= 0) {
-                      // 这是带标点前缀的 continuation
-                      accumulatedText += data.text;
-                    }
-                  }
+                if (data.mode === "2pass-offline") {
+                  // 2pass-offline: 离线修正结果，直接替换累积文本
+                  // 这是修正后的完整句子，应该替换而不是追加
+                  accumulatedText = data.text;
                   tempResult.value = accumulatedText;
                 } else {
-                  // 2pass-online: 实时流式结果，追加显示
+                  // 2pass-online 或其他模式: 实时流式结果，显示但不累积
                   tempResult.value = accumulatedText + data.text;
                 }
                 onResult?.(tempResult.value, false);
@@ -186,12 +170,14 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
 
   /**
    * 发送初始化消息 - 开始录音时发送
-   * 2pass-offline 模式：实时流式识别 + 离线修正
+   *
+   * 当前硬编码为 2pass-offline 模式：实时流式识别 + 离线修正
+   * 如需动态配置 mode，可在 UseFunASRWsOptions 中添加 mode 参数
    */
   function sendStartMessage() {
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       const msg = JSON.stringify({
-        mode: "2pass-offline",
+        mode: "2pass-offline", // TODO: 支持从配置动态获取
         wav_name: "modbus_voice_input",
         is_speaking: true,
         audio_fs: 16000,
@@ -269,13 +255,19 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
 
       const nativeSampleRate = audioContext.sampleRate;
 
-      // 加载 AudioWorklet
-      const workletUrl = "/workers/audio-processor.js";
+      // 加载 AudioWorklet（使用 Vite base URL，注意 BASE_URL 已包含尾部斜杠）
+      const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+        ? import.meta.env.BASE_URL
+        : `${import.meta.env.BASE_URL}/`;
+      // 添加时间戳参数破坏缓存，确保加载最新版本
+      const cacheBuster = `?v=${Date.now()}`;
+      const workletUrl = `${baseUrl}workers/audio-processor.js${cacheBuster}`;
+      console.log("加载 AudioWorklet:", workletUrl, "BASE_URL:", import.meta.env.BASE_URL);
       await audioContext.audioWorklet.addModule(workletUrl);
 
       // 创建音频源和 Worklet 节点
       const source = audioContext.createMediaStreamSource(mediaStream);
-      workletNode = new AudioWorkletNode(audioContext, "audio-resampler", {
+      workletNode = new AudioWorkletNode(audioContext, "audio-resampler-v6", {
         processorOptions: {
           nativeSampleRate,
           silenceThreshold: silenceConfig.threshold,
@@ -290,6 +282,9 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
           if (chunk.length > 0) {
             sendAudioChunk(chunk);
           }
+        } else if (event.data.type === "voice-detected") {
+          // 首次检测到语音
+          console.log("检测到语音开始");
         } else if (event.data.type === "silence-detected") {
           // 静音检测到，自动结束录音
           console.log("检测到静音，自动结束录音");
@@ -308,7 +303,6 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
       tempResult.value = "";
       finalResult.value = "";
       accumulatedText = "";
-      currentSentenceStart = -1;
       isRecording.value = true;
 
       console.log("开始录音");

@@ -123,10 +123,10 @@
           <el-table-column prop="host" label="IP地址" width="130" />
           <el-table-column prop="port" label="端口" width="80" />
           <el-table-column prop="slave_id" label="从站ID" width="80" />
-          <el-table-column prop="status" label="状态" width="80">
+          <el-table-column prop="device_status" label="状态" width="80">
             <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)">
-                {{ getStatusText(row.status) }}
+              <el-tag :type="getStatusType(row.device_status)">
+                {{ getStatusText(row.device_status) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -331,7 +331,7 @@
       <!-- 分页 -->
       <div class="pagination-container">
         <el-pagination
-          v-model:current-page="tagPagination.current"
+          v-model:current-page="tagPagination.page_no"
           v-model:page-size="tagPagination.pageSize"
           :total="tagPagination.total"
           :page-sizes="[10, 20, 50]"
@@ -346,7 +346,7 @@
     <el-dialog
       v-model="tagDialogVisible"
       :title="tagDialogTitle"
-      width="700px"
+      width="600px"
       @close="handleCloseTagDialog"
     >
       <el-form
@@ -373,12 +373,12 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="寄存器地址" prop="address">
               <el-input-number v-model="tagFormData.address" :min="0" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="寄存器类型" prop="register_type">
               <el-select v-model="tagFormData.register_type" style="width: 100%">
                 <el-option value="holding" label="保持寄存器" />
@@ -388,7 +388,9 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
             <el-form-item label="数据类型" prop="data_type">
               <el-select v-model="tagFormData.data_type" style="width: 100%">
                 <el-option value="INT16" label="INT16" />
@@ -399,21 +401,21 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="单位" prop="unit">
+              <el-input v-model="tagFormData.unit" placeholder="如: ℃" />
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row :gutter="16">
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="最小值" prop="min_value">
               <el-input-number v-model="tagFormData.min_value" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-form-item label="最大值" prop="max_value">
               <el-input-number v-model="tagFormData.max_value" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="单位" prop="unit">
-              <el-input v-model="tagFormData.unit" placeholder="如: ℃" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -475,7 +477,6 @@ import DeviceAPI, {
   type Device,
   type TagPoint,
 } from "@/api/module_modbus/device";
-import { ElMessage } from "element-plus";
 
 // 查询表单
 const queryFormRef = ref();
@@ -624,10 +625,8 @@ async function handleDeviceSubmit() {
 
     if (isEditDevice.value && editDeviceId.value) {
       await DeviceAPI.update(editDeviceId.value, deviceFormData);
-      ElMessage.success("更新成功");
     } else {
       await DeviceAPI.create(deviceFormData);
-      ElMessage.success("创建成功");
     }
 
     deviceDialogVisible.value = false;
@@ -638,8 +637,7 @@ async function handleDeviceSubmit() {
 }
 
 async function handleDeleteDevice(deviceId: number) {
-  await DeviceAPI.delete(deviceId);
-  ElMessage.success("删除成功");
+  await DeviceAPI.delete([deviceId]);
   loadDevices();
 }
 
@@ -653,7 +651,7 @@ const tagQueryFormData = reactive({
   register_type: undefined as string | undefined,
 });
 const tagPagination = reactive({
-  current: 1,
+  page_no: 1,
   pageSize: 10,
   total: 0,
 });
@@ -663,7 +661,7 @@ async function handleOpenTagDrawer(device: Device) {
   tagDrawerVisible.value = true;
   tagQueryFormData.name = undefined;
   tagQueryFormData.register_type = undefined;
-  tagPagination.current = 1;
+  tagPagination.page_no = 1;
   await loadTags();
 }
 
@@ -674,7 +672,7 @@ async function loadTags() {
     const result = await DeviceAPI.getTags(currentDevice.value.id, {
       name: tagQueryFormData.name,
       register_type: tagQueryFormData.register_type,
-      page: tagPagination.current,
+      page_no: tagPagination.page_no,
       page_size: tagPagination.pageSize,
     });
     tagTableData.value = result.data.data?.items || [];
@@ -685,14 +683,14 @@ async function loadTags() {
 }
 
 function handleTagQuery() {
-  tagPagination.current = 1;
+  tagPagination.page_no = 1;
   loadTags();
 }
 
 function handleTagResetQuery() {
   tagQueryFormData.name = undefined;
   tagQueryFormData.register_type = undefined;
-  tagPagination.current = 1;
+  tagPagination.page_no = 1;
   loadTags();
 }
 
@@ -702,7 +700,7 @@ function handleTagSizeChange(size: number) {
 }
 
 function handleTagCurrentChange(page: number) {
-  tagPagination.current = page;
+  tagPagination.page_no = page;
   loadTags();
 }
 
@@ -787,10 +785,8 @@ async function handleTagSubmit() {
 
     if (isEditTag.value && editTagId.value) {
       await DeviceAPI.updateTag(editTagId.value, tagFormData);
-      ElMessage.success("更新成功");
     } else if (currentDevice.value) {
       await DeviceAPI.createTag(currentDevice.value.id, tagFormData);
-      ElMessage.success("创建成功");
     }
 
     tagDialogVisible.value = false;
@@ -801,8 +797,7 @@ async function handleTagSubmit() {
 }
 
 async function handleDeleteTag(tagId: number) {
-  await DeviceAPI.deleteTag(tagId);
-  ElMessage.success("删除成功");
+  await DeviceAPI.deleteTag([tagId]);
   loadTags();
 }
 

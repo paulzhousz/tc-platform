@@ -24,10 +24,13 @@
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
 │  │                    plugin/module_modbus/                                 ││
-│  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐           ││
-│  │  │  device/   │ │  control/  │ │    log/    │ │  pending/  │           ││
-│  │  │  routers   │ │  routers   │ │  routers   │ │  routers   │           ││
-│  │  └──────┬─────┘ └──────┬─────┘ └────────────┘ └────────────┘           ││
+│  │  ┌────────────┐ ┌────────────┐ ┌────────────────────────────────────────┐ ││
+│  │  │  device/   │ │  control/  │ │         control/services/              │ ││
+│  │  │  routers   │ │  routers   │ │  ┌─────────┐ ┌─────────┐ ┌───────────┐ │ ││
+│  │  │            │ │ + ws.py    │ │  │PLCService│ │ Agent   │ │Connection │ │ ││
+│  │  └──────┬─────┘ └──────┬─────┘ │  │         │ │ Service │ │ Pool      │ │ ││
+│  │         │              │       │  └─────────┘ └─────────┘ └───────────┘ │ ││
+│  │         │              │       └────────────────────────────────────────┘ ││
 │  │         │              │                                                ││
 │  │  ┌──────▼──────────────▼──────────────────────────────────────────────┐ ││
 │  │  │                       Services Layer                                │ ││
@@ -43,6 +46,11 @@
 │  │  │                          models.py                                   ││
 │  │  │  Device | TagPoint | CommandLog | PendingConfirm | AgentSession     ││
 │  │  │  ChatHistory | ActionStep                                          ││
+│  │  └─────────────────────────────────────────────────────────────────────┘││
+│  │                                                                          ││
+│  │  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │  │                          schemas.py                                  ││
+│  │  │  Pydantic 验证模型（统一管理）                                        ││
 │  │  └─────────────────────────────────────────────────────────────────────┘││
 │  └──────────────────────────────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -519,9 +527,20 @@ expires_at = datetime.now() + timedelta(minutes=settings.MODBUS_PENDING_EXPIRE_M
 
 | 操作 | 所需权限 |
 |-----|---------|
-| 读取 PLC | `modbus:control:read` |
-| 写入 PLC | `modbus:control:write` |
-| 确认操作 | `modbus:pending:confirm` |
+| 查看设备列表 | `module_modbus:device:query` |
+| 查看设备详情 | `module_modbus:device:detail` |
+| 创建设备 | `module_modbus:device:create` |
+| 更新设备 | `module_modbus:device:update` |
+| 删除设备 | `module_modbus:device:delete` |
+| 查看点位列表 | `module_modbus:tag:query` |
+| 创建点位 | `module_modbus:tag:create` |
+| 更新点位 | `module_modbus:tag:update` |
+| 删除点位 | `module_modbus:tag:delete` |
+| 读取 PLC | `module_modbus:control:query` |
+| 写入 PLC | `module_modbus:control:write` |
+| 确认操作 | `module_modbus:control:write` |
+| 查看日志列表 | `module_modbus:log:query` |
+| 查看日志详情 | `module_modbus:log:detail` |
 
 ### 7.4 LLM Agent 安全措施
 
@@ -536,7 +555,11 @@ expires_at = datetime.now() + timedelta(minutes=settings.MODBUS_PENDING_EXPIRE_M
 
 ```javascript
 // 客户端连接时携带 token
-const ws = new WebSocket(`ws://host/ws/modbus?token=${jwtToken}`);
+// 连接地址: ws://127.0.0.1:9000/api/v1/ws/modbus?token=xxx
+const WS_URL = import.meta.env.VITE_APP_WS_ENDPOINT;  // ws://127.0.0.1:9000
+const url = new URL("/api/v1/ws/modbus", WS_URL);
+url.searchParams.append("token", jwtToken);
+const ws = new WebSocket(url.toString());
 ```
 
 ### 8.2 服务端推送消息格式

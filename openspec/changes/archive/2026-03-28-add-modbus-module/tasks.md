@@ -54,8 +54,19 @@
 
 ### 2.4 辅助服务
 - [x] 创建 `control/services/poll_service.py` - 轮询服务
-- [x] 创建 `control/services/websocket_service.py` - WebSocket 服务
+- [x] 创建 `control/services/websocket_service.py` - WebSocket 消息服务
 - [x] 创建 `control/services/cleanup_service.py` - 清理服务
+- [x] 创建 `control/services/config_service.py` - 配置服务（Redis 配置读取）
+
+### 2.5 CRUD 服务层
+- [x] 创建 `control/crud/command_log.py` - 命令日志 CRUD
+- [x] 创建 `control/crud/chat_history.py` - 聊天历史 CRUD
+- [x] 创建 `control/crud/pending_confirm.py` - 待确认操作 CRUD
+
+### 2.6 业务服务层
+- [x] 创建 `control/services/command_log_service.py` - 命令日志服务
+- [x] 创建 `control/services/chat_history_service.py` - 聊天历史服务
+- [x] 创建 `control/services/pending_confirm_service.py` - 待确认操作服务
 
 ---
 
@@ -64,45 +75,52 @@
 > 依赖：Phase 1、Phase 2 完成
 
 ### 3.1 数据验证模型
-- [x] 创建 `schemas.py` - Pydantic 验证模型
+- [x] 创建 `schemas.py` - Pydantic 验证模型（根目录统一管理）
 
-### 3.2 API 控制器（合并到 controller.py）
-- [x] 创建 `control/controller.py` - 统一 API 路由
-  - [x] 设备管理 API (DeviceRouter)
-    - [x] GET /device/list
-    - [x] GET /device/{id}
-    - [x] POST /device
-    - [x] PUT /device/{id}
-    - [x] DELETE /device/{id}
-    - [x] GET /device/{id}/tags
-    - [x] POST /device/{id}/tags
-  - [x] 控制操作 API (ControlRouter)
-    - [x] POST /connect
-    - [x] POST /disconnect
-    - [x] GET /connection-status
-    - [x] POST /chat
-    - [x] POST /chat/stream (SSE)
-    - [x] POST /read
-    - [x] POST /write
-    - [x] POST /adjust
-    - [x] GET /quick-commands
-  - [x] 操作日志 API (LogRouter)
-    - [x] GET /logs
-    - [x] GET /logs/{id}
-  - [x] 待确认操作 API (PendingRouter)
-    - [x] GET /pending
-    - [x] POST /pending/{id}/confirm
-    - [x] POST /pending/{id}/reject
-  - [x] 聊天历史 API
-    - [x] GET /chat-history
-    - [x] GET /chat-history/{id}
-    - [x] DELETE /chat-history/{id}
+### 3.2 设备管理 API（device/controller.py）
+- [x] GET /device/list - 获取设备列表
+- [x] POST /device/create - 创建设备
+- [x] GET /device/detail/{id} - 获取设备详情
+- [x] PUT /device/update/{id} - 更新设备
+- [x] DELETE /device/delete - 删除设备
+- [x] POST /device/{id}/test - 测试设备连接
+- [x] GET /device/{device_id}/tag/list - 获取点位列表
+- [x] POST /device/{device_id}/tag/create - 创建点位
+- [x] PUT /device/tag/update/{tag_id} - 更新点位
+- [x] DELETE /device/tag/delete - 删除点位
 
-### 3.3 WebSocket 路由
-- [x] 创建 WebSocket 端点 `/ws/modbus`
+### 3.3 控制操作 API（control/controller.py）
+- [x] POST /control/connect - 连接设备
+- [x] POST /control/disconnect - 断开设备
+- [x] GET /control/connection-status - 获取连接状态
+- [x] GET /control/config - 获取运行时配置
+- [x] POST /control/chat - 对话接口
+- [x] POST /control/chat/stream - 流式对话接口（SSE）
+- [x] POST /control/read - 直接读取 PLC
+- [x] POST /control/write - 直接写入 PLC
+- [x] GET /control/quick-commands - 获取快捷指令
+
+### 3.4 操作日志 API（control/controller.py - LogRouter）
+- [x] GET /log/list - 获取日志列表
+- [x] GET /log/detail/{id} - 获取日志详情
+
+### 3.5 待确认操作 API（control/controller.py - PendingRouter）
+- [x] GET /pending/list - 获取待确认列表
+- [x] POST /pending/{id}/confirm - 确认操作
+- [x] POST /pending/{id}/reject - 拒绝操作
+
+### 3.6 聊天历史 API（control/controller.py）
+- [x] GET /control/chat-history - 获取历史列表
+- [x] GET /control/chat-history/{session_id} - 获取历史详情
+- [x] POST /control/chat-history - 保存历史
+- [x] DELETE /control/chat-history/{session_id} - 删除历史
+- [x] DELETE /control/chat-history - 清空所有历史
+
+### 3.7 WebSocket 路由（control/ws.py）
+- [x] 创建 WebSocket 端点 `/api/v1/ws/modbus`
 - [x] 实现连接认证（Token 验证）
 - [x] 实现消息广播逻辑
-- [x] 在 `controller.py` 中注册 WebSocket 路由
+- [x] 在 `init_app.py` 中手动注册 WebSocket 路由
 
 ---
 
@@ -114,7 +132,7 @@
 - [x] 创建 `frontend/src/api/module_modbus/device.ts`
 - [x] 创建 `frontend/src/api/module_modbus/control.ts`
 - [x] 创建 `frontend/src/api/module_modbus/log.ts`
-- [x] 创建 `frontend/src/api/module_modbus/index.ts` - 导出
+- [x] 创建 `frontend/src/api/module_modbus/index.ts` - 统一导出
 
 ### 4.2 状态管理
 - [x] 创建 `frontend/src/store/modules/modbus.store.ts`
@@ -126,8 +144,10 @@
   - [x] WebSocket 状态管理
 
 ### 4.3 组合式函数
+- [x] 创建 `frontend/src/composables/modbus/index.ts` - 统一导出
 - [x] 创建 `frontend/src/composables/modbus/use-modbus-ws.ts`
 - [x] 创建 `frontend/src/composables/modbus/use-funasr-ws.ts`
+- [x] 创建 `frontend/src/composables/modbus/use-typewriter.ts` - 打字机效果
 
 ---
 
@@ -213,8 +233,15 @@
 ### 9.1 后端测试
 - [x] Schemas 单元测试
 - [x] PLC 服务单元测试
+- [x] 控制器 API 测试
+- [x] 设备 API 测试
+- [x] 待确认操作 API 测试
+- [x] WebSocket 测试
 - [ ] Agent 服务集成测试
 
 ### 9.2 文档
 - [ ] 更新 CLAUDE.md
 - [x] 添加 API 文档
+
+### 9.3 辅助工具
+- [x] 创建 `modbus_simulator.py` - Modbus 模拟器（测试用）

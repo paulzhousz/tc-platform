@@ -8,20 +8,22 @@ LLM Agent 服务
 import json
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, AsyncGenerator, Optional
+from typing import Any
 
 from langchain.agents import create_agent
 from langchain.tools import tool
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.config.setting import settings
-from app.plugin.module_modbus.control.services.sync_plc_service import SyncPLCService
+from app.plugin.module_modbus.control.services.config_service import ModbusConfigService
+from app.plugin.module_modbus.control.services.plc_service import PLCService
 from app.plugin.module_modbus.models import AgentSessionModel, DeviceModel
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ def load_system_prompt() -> str:
     # agent_service.py -> services -> control -> module_modbus -> plugin -> app -> backend/
     prompt_path = Path(__file__).parent.parent.parent.parent.parent.parent / "config" / "modbus_system_prompt.md"
     try:
-        with open(prompt_path, "r", encoding="utf-8") as f:
+        with open(prompt_path, encoding="utf-8") as f:
             content = f.read()
         logger.info(f"系统提示词加载成功: {prompt_path}")
         return content
@@ -45,7 +47,7 @@ def load_system_prompt() -> str:
 SYSTEM_PROMPT = load_system_prompt()
 
 
-def _extract_operation_intent(chat_history: list[dict]) -> Optional[dict[str, Any]]:
+def _extract_operation_intent(chat_history: list[dict]) -> dict[str, Any] | None:
     """
     从对话历史中提取用户的原始操作意图
 
@@ -128,7 +130,7 @@ def _extract_operation_intent(chat_history: list[dict]) -> Optional[dict[str, An
 
 def _preprocess_user_message(
     session: AgentSessionModel, message: str
-) -> tuple[str, Optional[str], bool, bool]:
+) -> tuple[str, str | None, bool, bool]:
     """
     预处理用户消息，检查消歧/确认上下文并注入提示
 
@@ -239,19 +241,20 @@ def _preprocess_user_message(
 class AgentService:
     """LLM Agent 服务"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession, config: dict[str, Any] | None = None):
         self.db = db
+        self._config = config or ModbusConfigService.DEFAULTS.copy()
         self._agent = None
         self._tools = None
-        self._current_session: Optional[AgentSessionModel] = None
+        self._current_session: AgentSessionModel | None = None
 
     def get_tools(self, user_id: int) -> list:
         """获取工具列表（绑定当前用户）"""
         if self._tools is None:
-            plc_service = SyncPLCService(self.db)
+            plc_service = PLCService(self.db)
 
             @tool
-            def search_device(keyword: str) -> str:
+            async def search_device(keyword: str) -> str:
                 """
                 搜索设备。
                 当用户提到设备名称时使用此工具搜索设备。
@@ -259,7 +262,7 @@ class AgentService:
                 返回：匹配的设备列表，包含 device_id、match_score、disambiguation_info
                 """
                 logger.info(f"[Agent Tool] search_device 被调用, keyword={keyword}")
-                result = plc_service.search_devices(keyword)
+                result = await plc_service.search_devices(keyword)
                 if not result["results"]:
                     logger.info("[Agent Tool] search_device 未找到结果")
                     return f"未找到匹配的设备。{result.get('disambiguation_hint', '')}"
@@ -291,7 +294,7 @@ class AgentService:
                 return json.dumps(result, ensure_ascii=False, indent=2)
 
             @tool
-            def search_tag_mapping(device_id: int, query: str) -> str:
+            async def search_tag_mapping(device_id: int, query: str) -> str:
                 """
                 在指定设备下搜索点位。
                 必须在确定 device_id 后调用此工具。
@@ -303,7 +306,7 @@ class AgentService:
                 logger.info(
                     f"[Agent Tool] search_tag_mapping 被调用, device_id={device_id}, query={query}"
                 )
-                result = plc_service.search_tags_in_device(device_id, query)
+                result = await plc_service.search_tags_in_device(device_id, query)
 
                 logger.info(
                     f"[Agent Tool] search_tag_mapping 找到 {len(result['results'])} 个结果, disambiguation_needed={result['disambiguation_needed']}"
@@ -335,7 +338,7 @@ class AgentService:
                 return json.dumps(result, ensure_ascii=False, indent=2)
 
             @tool
-            def read_plc(device_id: int, tag_name: str) -> str:
+            async def read_plc(device_id: int, tag_name: str) -> str:
                 """
                 从 PLC 读取设备状态或传感器数值。
                 参数：
@@ -346,7 +349,7 @@ class AgentService:
                 logger.info(
                     f"[Agent Tool] read_plc 被调用, device_id={device_id}, tag_name={tag_name}"
                 )
-                result = plc_service.read(device_id, tag_name, user_id)
+                result = await plc_service.read(device_id, tag_name, user_id)
                 if result["success"]:
                     logger.info(f"[Agent Tool] read_plc 成功, value={result['value']}")
                     return json.dumps(
@@ -379,7 +382,7 @@ class AgentService:
                 )
 
             @tool
-            def write_plc(device_id: int, tag_name: str, value: float) -> str:
+            async def write_plc(device_id: int, tag_name: str, value: float) -> str:
                 """
                 向 PLC 写入设定值或控制指令。
                 参数：
@@ -391,7 +394,7 @@ class AgentService:
                 logger.info(
                     f"[Agent Tool] write_plc 被调用, device_id={device_id}, tag_name={tag_name}, value={value}"
                 )
-                result = plc_service.write(device_id, tag_name, value, user_id)
+                result = await plc_service.write(device_id, tag_name, value, user_id)
                 if result["success"]:
                     logger.info(f"[Agent Tool] write_plc 成功, value={result['value']}")
                     return json.dumps(
@@ -418,7 +421,7 @@ class AgentService:
 
                     # 先获取设备名称
                     stmt = select(DeviceModel).where(DeviceModel.id == device_id)
-                    device = self.db.execute(stmt).scalar_one_or_none()
+                    device = (await self.db.execute(stmt)).scalar_one_or_none()
                     device_name = device.name if device else f"设备{device_id}"
 
                     if self._current_session:
@@ -455,7 +458,7 @@ class AgentService:
                 )
 
             @tool
-            def adjust_plc(device_id: int, tag_name: str, delta: float) -> str:
+            async def adjust_plc(device_id: int, tag_name: str, delta: float) -> str:
                 """
                 调整设备参数的增量值。
                 参数：
@@ -467,7 +470,7 @@ class AgentService:
                 logger.info(
                     f"[Agent Tool] adjust_plc 被调用, device_id={device_id}, tag_name={tag_name}, delta={delta}"
                 )
-                result = plc_service.adjust(device_id, tag_name, delta, user_id)
+                result = await plc_service.adjust(device_id, tag_name, delta, user_id)
                 if result["success"]:
                     logger.info("[Agent Tool] adjust_plc 成功")
                     return json.dumps(
@@ -497,7 +500,7 @@ class AgentService:
 
                     # 先获取设备名称
                     stmt = select(DeviceModel).where(DeviceModel.id == device_id)
-                    device = self.db.execute(stmt).scalar_one_or_none()
+                    device = (await self.db.execute(stmt)).scalar_one_or_none()
                     device_name = device.name if device else f"设备{device_id}"
 
                     if self._current_session:
@@ -536,7 +539,7 @@ class AgentService:
                 )
 
             @tool
-            def confirm_operation() -> str:
+            async def confirm_operation() -> str:
                 """
                 确认执行待确认的操作。
                 当用户回复"确认"、"是"、"执行"时调用此工具。
@@ -554,7 +557,7 @@ class AgentService:
                 if not pending:
                     return "没有待确认的操作。请先发起一个需要确认的操作。"
 
-                result = plc_service.write(
+                result = await plc_service.write(
                     pending["device_id"],
                     pending["tag_name"],
                     pending["value"],
@@ -571,7 +574,7 @@ class AgentService:
                 return f"操作执行失败: {result['message']}。任务结束。"
 
             @tool
-            def cancel_operation() -> str:
+            async def cancel_operation() -> str:
                 """
                 取消待确认的操作。
                 当用户回复"取消"、"不要"时调用此工具。
@@ -613,8 +616,8 @@ class AgentService:
         llm = ChatOpenAI(
             base_url=settings.MODBUS_LLM_BASE_URL,
             api_key=settings.MODBUS_LLM_API_KEY,
-            model=settings.MODBUS_LLM_MODEL_NAME,
-            temperature=settings.MODBUS_LLM_TEMPERATURE,
+            model=self._config.get("modbus_llm_model_name"),
+            temperature=self._config.get("modbus_llm_temperature"),
         )
 
         # 使用 LangChain 1.x 的 create_agent API
@@ -625,19 +628,19 @@ class AgentService:
         )
         return agent
 
-    def _get_or_create_session(self, user_id: int, session_id: Optional[str] = None) -> AgentSessionModel:
+    async def _get_or_create_session(self, user_id: int, session_id: str | None = None) -> AgentSessionModel:
         """获取或创建会话"""
         if session_id:
             stmt = select(AgentSessionModel).where(
                 AgentSessionModel.session_id == session_id,
                 AgentSessionModel.user_id == user_id,
             )
-            session = self.db.execute(stmt).scalar_one_or_none()
+            session = (await self.db.execute(stmt)).scalar_one_or_none()
 
             if session and not self._is_session_expired(session):
-                self.db.refresh(session)
+                await self.db.refresh(session)
                 session.last_active = datetime.now()
-                self.db.commit()
+                await self.db.commit()
                 logger.info(
                     f"[Agent] 获取会话 {session.session_id}, operation_context type: {type(session.operation_context)}"
                 )
@@ -647,10 +650,10 @@ class AgentService:
         new_session = AgentSessionModel(
             user_id=user_id,
             session_id=str(uuid.uuid4()),
-            ttl_minutes=settings.MODBUS_LLM_SESSION_TTL_MINUTES,
+            ttl_minutes=self._config.get("modbus_llm_session_ttl_minutes"),
         )
         self.db.add(new_session)
-        self.db.commit()
+        await self.db.commit()
         return new_session
 
     def _is_session_expired(self, session: AgentSessionModel) -> bool:
@@ -663,7 +666,7 @@ class AgentService:
         history = []
         chat_data = session.chat_history or []
 
-        max_turns = settings.MODBUS_LLM_MAX_HISTORY_TURNS
+        max_turns = self._config.get("modbus_llm_max_history_turns")
         recent_history = (
             chat_data[-max_turns * 2 :] if len(chat_data) > max_turns * 2 else chat_data
         )
@@ -683,7 +686,7 @@ class AgentService:
         chat_history.append({"role": "user", "content": user_message})
         chat_history.append({"role": "assistant", "content": assistant_reply})
 
-        max_messages = settings.MODBUS_LLM_MAX_HISTORY_TURNS * 2
+        max_messages = self._config.get("modbus_llm_max_history_turns", 20) * 2
         if len(chat_history) > max_messages:
             chat_history = chat_history[-max_messages:]
 
@@ -769,14 +772,14 @@ class AgentService:
             logger.info("[Agent] 清除待确认上下文")
 
     async def chat(
-        self, user_id: int, message: str, session_id: Optional[str] = None
+        self, user_id: int, message: str, session_id: str | None = None
     ) -> dict[str, Any]:
         """处理对话（同步模式）- LangChain 1.x 版本"""
         logger.info(
             f"[Agent] 开始处理对话, user_id={user_id}, message={message}, session_id={session_id}"
         )
 
-        session = self._get_or_create_session(user_id, session_id)
+        session = await self._get_or_create_session(user_id, session_id)
         logger.info(f"[Agent] 会话ID: {session.session_id}")
 
         self._current_session = session
@@ -850,10 +853,10 @@ class AgentService:
             }
 
     async def stream_chat(
-        self, user_id: int, message: str, session_id: Optional[str] = None
+        self, user_id: int, message: str, session_id: str | None = None
     ) -> AsyncGenerator[dict[str, Any], None]:
         """流式处理对话 - LangChain 1.x 版本"""
-        session = self._get_or_create_session(user_id, session_id)
+        session = await self._get_or_create_session(user_id, session_id)
 
         self._current_session = session
 
@@ -898,14 +901,17 @@ class AgentService:
                 {"messages": messages},
                 stream_mode=["messages", "updates"],
             ):
+                # 检查是否需要中断（消歧或确认请求）
                 if should_stop:
                     logger.info("[Agent Stream] 检测到需要用户交互，中断执行")
                     break
 
                 if stream_mode == "messages":
-                    token, metadata = data
-                    if isinstance(token, AIMessageChunk):
-                        # 处理流式文本
+                    token, _ = data
+                    # LangGraph 的 astream 可能返回 AIMessage（完整消息）或 AIMessageChunk（流式块）
+                    # AIMessageChunk 是 AIMessage 的子类，所以检查 AIMessage 可以同时处理两种情况
+                    if isinstance(token, AIMessage):
+                        # 处理流式文本或完整消息
                         if token.content:
                             full_reply += token.content
                             yield {
@@ -913,8 +919,8 @@ class AgentService:
                                 "session_id": session.session_id,
                                 "content": token.content,
                             }
-                        # 处理工具调用块
-                        if token.tool_call_chunks:
+                        # 处理工具调用块（仅 AIMessageChunk 有 tool_call_chunks）
+                        if hasattr(token, "tool_call_chunks") and token.tool_call_chunks:
                             for tc in token.tool_call_chunks:
                                 if tc.get("name"):
                                     logger.info(f"[Agent Tool] 调用开始: {tc['name']}")
@@ -1035,7 +1041,7 @@ class AgentService:
     def cleanup_expired_sessions(self):
         """清理过期会话"""
         cutoff_time = datetime.now() - timedelta(
-            minutes=settings.MODBUS_LLM_SESSION_TTL_MINUTES
+            minutes=self._config.get("modbus_llm_session_ttl_minutes", 10)
         )
 
         stmt = select(AgentSessionModel).where(

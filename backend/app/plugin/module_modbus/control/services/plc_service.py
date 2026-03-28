@@ -10,19 +10,19 @@ import time
 from datetime import datetime, timedelta
 from typing import Any
 
+from redis.asyncio.client import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config.setting import settings
+from app.plugin.module_modbus.control.services.config_service import ModbusConfigService
+from app.plugin.module_modbus.control.services.connection_pool import connection_pool
 from app.plugin.module_modbus.models import (
     CommandLogModel,
     DeviceModel,
     PendingConfirmModel,
     TagPointModel,
 )
-from app.plugin.module_modbus.control.services.client_factory import IModbusClient
-from app.plugin.module_modbus.control.services.connection_pool import connection_pool
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,9 @@ logger = logging.getLogger(__name__)
 class PLCService:
     """PLC 操作服务 - 协议无关的业务逻辑层"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis | None = None):
         self.db = db
+        self._redis = redis
 
     def _normalize_address(self, address: int, register_type: str) -> int:
         """
@@ -92,7 +93,7 @@ class PLCService:
         if not client:
             command_log.log_status = "failed"
             command_log.error_message = "无法获取设备连接"
-            await self.db.commit()
+            await self.db.flush()
             return {"success": False, "message": "无法获取设备连接"}
 
         try:
@@ -117,7 +118,7 @@ class PLCService:
             if not result.get("success"):
                 command_log.log_status = "failed"
                 command_log.error_message = result.get("error", "读取失败")
-                await self.db.commit()
+                await self.db.flush()
                 return {"success": False, "message": result.get("error", "读取失败")}
 
             # 5. 数值转换
@@ -137,7 +138,7 @@ class PLCService:
             command_log.actual_value = value
             command_log.execution_time = (time.time() - start_time) * 1000
             command_log.executed_at = datetime.now()
-            await self.db.commit()
+            await self.db.flush()
 
             return {
                 "success": True,
@@ -159,7 +160,7 @@ class PLCService:
         except Exception as e:
             command_log.log_status = "failed"
             command_log.error_message = str(e)
-            await self.db.commit()
+            await self.db.flush()
             return {"success": False, "message": str(e)}
 
         finally:
@@ -259,7 +260,7 @@ class PLCService:
         if not client:
             command_log.log_status = "failed"
             command_log.error_message = "无法获取设备连接"
-            await self.db.commit()
+            await self.db.flush()
             return {"success": False, "message": "无法获取设备连接"}
 
         try:
@@ -285,7 +286,7 @@ class PLCService:
             if not result.get("success"):
                 command_log.log_status = "failed"
                 command_log.error_message = result.get("error", "写入失败")
-                await self.db.commit()
+                await self.db.flush()
                 return {"success": False, "message": result.get("error", "写入失败")}
 
             # 更新缓存
@@ -297,7 +298,7 @@ class PLCService:
             command_log.actual_value = value
             command_log.execution_time = (time.time() - start_time) * 1000
             command_log.executed_at = datetime.now()
-            await self.db.commit()
+            await self.db.flush()
 
             logger.info(
                 f"PLC 写入成功: 设备={device.name}, 点位={tag.name}, 值={value} {tag.unit or ''}"
@@ -322,7 +323,7 @@ class PLCService:
         except Exception as e:
             command_log.log_status = "failed"
             command_log.error_message = str(e)
-            await self.db.commit()
+            await self.db.flush()
             return {"success": False, "message": str(e)}
 
         finally:
@@ -719,9 +720,11 @@ class PLCService:
         ai_reasoning: str | None = None,
     ) -> PendingConfirmModel:
         """创建待确认记录"""
-        expires_at = datetime.now() + timedelta(
-            minutes=settings.MODBUS_PENDING_EXPIRE_MINUTES
-        )
+        expire_minutes = ModbusConfigService.DEFAULTS.get("modbus_pending_expire_minutes", 10)
+        if self._redis:
+            expire_minutes = await ModbusConfigService.get(self._redis, "modbus_pending_expire_minutes")
+
+        expires_at = datetime.now() + timedelta(minutes=expire_minutes)
 
         pending = PendingConfirmModel(
             user_id=user_id,
@@ -735,7 +738,7 @@ class PLCService:
             ai_explanation=ai_reasoning,
         )
         self.db.add(pending)
-        await self.db.commit()
+        await self.db.flush()
 
         return pending
 

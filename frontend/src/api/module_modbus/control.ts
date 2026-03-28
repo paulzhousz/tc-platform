@@ -1,4 +1,5 @@
 import request from "@/utils/request";
+import { Auth } from "@/utils/auth";
 
 const API_PATH = "/modbus/control";
 
@@ -139,9 +140,11 @@ const ControlAPI = {
     onEvent: (event: StreamEvent) => void,
     onError?: (error: Error) => void
   ) {
-    const token = localStorage.getItem("token");
-    // 使用 Vite proxy，添加 /proxy-default 前缀
-    const url = "/proxy-default/modbus/control/chat/stream";
+    // 使用 Auth 工具类获取 token（支持"记住我"功能）
+    const token = Auth.getAccessToken();
+    // 使用 Vite proxy 前缀 (VITE_APP_BASE_API=/api/v1)
+    const baseUrl = import.meta.env.VITE_APP_BASE_API;
+    const url = `${baseUrl}/modbus/control/chat/stream`;
     const controller = new AbortController();
 
     fetch(url, {
@@ -235,10 +238,18 @@ const ControlAPI = {
     });
   },
 
+  /** 获取 Modbus 配置 */
+  getConfig() {
+    return request<ApiResponse<ModbusConfig>>({
+      url: `${API_PATH}/config`,
+      method: "get",
+    });
+  },
+
   // ==================== Chat History API ====================
 
   /** 获取聊天历史列表 */
-  getChatHistoryList(params?: { page?: number; page_size?: number }) {
+  getChatHistoryList(params?: { page_no?: number; page_size?: number }) {
     return request<ApiResponse<{ items: ChatHistoryItem[]; total: number }>>({
       url: `${API_PATH}/chat-history`,
       method: "get",
@@ -259,6 +270,15 @@ const ControlAPI = {
     return request<ApiResponse<{ message: string }>>({
       url: `${API_PATH}/chat-history/${sessionId}`,
       method: "delete",
+    });
+  },
+
+  /** 保存聊天历史 */
+  saveChatHistory(data: ChatHistorySaveRequest) {
+    return request<ApiResponse<{ id: number; session_id: string }>>({
+      url: `${API_PATH}/chat-history`,
+      method: "post",
+      data,
     });
   },
 };
@@ -300,4 +320,36 @@ export interface WriteRequest {
   device_id: number;
   tag_name: string;
   value: number;
+}
+
+/** 保存聊天历史请求 */
+export interface ChatHistorySaveRequest {
+  session_id: string;
+  messages: ChatMessage[];
+  device_count?: number;
+  device_names?: string[];
+}
+
+/** Modbus 运行时配置 */
+export interface ModbusConfig {
+  // LLM 配置
+  modbus_llm_model_name: string;
+  modbus_llm_temperature: number;
+  modbus_llm_session_ttl_minutes: number;
+  modbus_llm_max_history_turns: number;
+  // 重试配置
+  modbus_retry_enabled: boolean;
+  modbus_retry_times: number;
+  modbus_retry_interval: number;
+  // 轮询配置
+  modbus_poll_enabled: boolean;
+  modbus_poll_interval: number;
+  // 待确认配置
+  modbus_pending_expire_minutes: number;
+  // FunASR 配置
+  modbus_funasr_mode: string;
+  modbus_silence_threshold: number;
+  modbus_silence_duration: number;
+  // 聊天历史配置
+  modbus_chat_save_min_messages: number;
 }

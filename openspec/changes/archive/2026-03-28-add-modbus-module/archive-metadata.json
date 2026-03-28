@@ -1,0 +1,40 @@
+{
+  "archivedAt": "2026-03-28T12:00:00Z",
+  "changeName": "add-modbus-module",
+  "status": "completed",
+  "tasksCompleted": 58,
+  "tasksTotal": 60,
+  "pendingTasks": [
+    "Agent 服务集成测试",
+    "更新 CLAUDE.md"
+  ],
+  "testsPassing": true,
+  "testsCount": 161,
+  "codeReviewed": true,
+  "criticalIssuesFixed": 2,
+  "deltaSpecs": {
+    "added": [
+      "modbus/requirements"
+    ],
+    "modified": [],
+    "removed": []
+  },
+  "keyFiles": {
+    "backend": [
+      "app/plugin/module_modbus/models.py",
+      "app/plugin/module_modbus/schemas.py",
+      "app/plugin/module_modbus/control/controller.py",
+      "app/plugin/module_modbus/control/ws.py",
+      "app/plugin/module_modbus/control/services/"
+    ],
+    "frontend": [
+      "src/views/module_modbus/",
+      "src/api/module_modbus/",
+      "src/composables/modbus/",
+      "src/store/modules/modbus.store.ts"
+    ],
+    "tests": [
+      "tests/module_modbus/"
+    ]
+  }
+}

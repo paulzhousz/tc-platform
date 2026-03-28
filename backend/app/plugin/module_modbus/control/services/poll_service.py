@@ -7,12 +7,12 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any
 
+from redis.asyncio.client import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.setting import settings
+from app.plugin.module_modbus.control.services.config_service import ModbusConfigService
 from app.plugin.module_modbus.control.services.connection_pool import connection_pool
 from app.plugin.module_modbus.control.services.websocket_service import ws_manager
 from app.plugin.module_modbus.models import DeviceModel, TagPointModel
@@ -32,6 +32,7 @@ class PollService:
     def __init__(self):
         self._running = False
         self._task: asyncio.Task | None = None
+        self._redis: Redis | None = None
         # 设备上次在线状态 {device_id: bool}
         self._device_status: dict[int, bool] = {}
         # 点位上次值 {tag_id: float}
@@ -39,14 +40,20 @@ class PollService:
         # 设备最后通信时间 {device_id: datetime}
         self._last_seen: dict[int, datetime] = {}
         # 离线阈值（秒）
-        self._offline_threshold = settings.MODBUS_POLL_INTERVAL * 3
+        self._offline_threshold: int = 0
 
-    def start(self):
-        """启动轮询服务"""
+    async def start(self, redis: Redis):
+        """启动轮询服务
+
+        参数:
+            redis: Redis 客户端实例
+        """
         if self._running:
             logger.warning("轮询服务已在运行中")
             return
 
+        self._redis = redis
+        self._offline_threshold = await ModbusConfigService.get(redis, "modbus_poll_interval") * 3
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
         logger.info("设备状态轮询服务已启动")
@@ -72,17 +79,24 @@ class PollService:
                 logger.error(f"轮询设备状态失败: {e}")
 
             # 等待下一轮
-            await asyncio.sleep(settings.MODBUS_POLL_INTERVAL)
+            if self._redis:
+                interval = await ModbusConfigService.get(self._redis, "modbus_poll_interval")
+                await asyncio.sleep(interval)
+            else:
+                await asyncio.sleep(5)  # 默认值
 
     async def _poll_all_devices(self):
-        """轮询所有活跃设备"""
+        """轮询所有在线设备"""
         # 使用 async session factory
-        from app.core.db import async_db_session
+        from app.core.database import async_db_session
 
         async with async_db_session() as db:
             try:
-                # 获取所有启用的设备
-                stmt = select(DeviceModel).where(DeviceModel.is_active == True)
+                # 只获取在线且启用的设备
+                stmt = select(DeviceModel).where(
+                    DeviceModel.is_active == True,
+                    DeviceModel.device_status == "online",
+                )
                 devices = (await db.execute(stmt)).scalars().all()
 
                 for device in devices:
@@ -103,7 +117,8 @@ class PollService:
         stmt = select(TagPointModel).where(
             TagPointModel.device_id == device.id, TagPointModel.is_active == True
         )
-        tag = (await db.execute(stmt)).scalar_one_or_none()
+        # 设备可能有多个点位，只需取第一个用于检测连接状态
+        tag = (await db.execute(stmt)).scalars().first()
 
         if not tag:
             # 没有点位，只检查连接
@@ -264,7 +279,7 @@ class PollService:
         should_update = old_status is None or old_status != is_online
 
         if should_update:
-            device.status = status
+            device.device_status = status
             if is_online:
                 device.last_seen = datetime.now()
             await db.commit()

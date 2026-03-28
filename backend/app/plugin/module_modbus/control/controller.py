@@ -3,55 +3,46 @@ Modbus 控制模块 API 控制器
 
 包含设备管理、PLC 控制、日志查询、待确认操作等所有 API。
 """
+from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path as PathlibPath
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Path, Query, WebSocket
+from fastapi import APIRouter, Body, Depends, Path, Query
 from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio.client import Redis
+from sqlalchemy import select
 
 from app.api.v1.module_system.auth.schema import AuthSchema
 from app.common.response import ErrorResponse, SuccessResponse
-from app.config.setting import settings
-from app.core.dependencies import AuthPermission
-from app.core.logger import log
+from app.core.dependencies import AuthPermission, redis_getter
 from app.core.router_class import OperationLogRoute
 from app.plugin.module_modbus.control.services.agent_service import AgentService
+from app.plugin.module_modbus.control.services.chat_history_service import ChatHistoryService
+from app.plugin.module_modbus.control.services.command_log_service import CommandLogService
+from app.plugin.module_modbus.control.services.config_service import ModbusConfigService
 from app.plugin.module_modbus.control.services.connection_pool import connection_pool
+from app.plugin.module_modbus.control.services.pending_confirm_service import PendingConfirmService
 from app.plugin.module_modbus.control.services.plc_service import PLCService
+from app.plugin.module_modbus.control.services.websocket_service import ws_manager
 from app.plugin.module_modbus.models import (
-    ChatHistoryModel,
-    CommandLogModel,
     DeviceModel,
-    PendingConfirmModel,
-    TagPointModel,
 )
 from app.plugin.module_modbus.schemas import (
     ChatHistoryCreate,
     ChatHistoryDetailResponse,
     ChatHistoryListResponse,
-    ChatHistoryResponse,
     ChatRequest,
     ChatResponse,
+    CommandLogFilter,
     CommandLogListResponse,
     CommandLogResponse,
     ConfirmAction,
-    DeviceCreate,
-    DeviceListResponse,
-    DeviceResponse,
-    DeviceUpdate,
     PendingConfirmListResponse,
-    PendingConfirmResponse,
     ReadRequest,
-    TagPointCreate,
-    TagPointListResponse,
-    TagPointResponse,
-    TagPointUpdate,
     WriteRequest,
 )
 
@@ -62,291 +53,6 @@ logger = logging.getLogger(__name__)
 QUICK_COMMANDS_CONFIG_PATH = (
     PathlibPath(__file__).parent.parent.parent.parent.parent / "config" / "modbus_quick_commands.json"
 )
-
-# ==================== 设备管理路由 ====================
-
-DeviceRouter = APIRouter(
-    route_class=OperationLogRoute, prefix="/device", tags=["Modbus设备管理"]
-)
-
-
-@DeviceRouter.get(
-    "/list",
-    summary="获取设备列表",
-    description="获取所有设备列表",
-    response_model=DeviceListResponse,
-)
-async def list_devices(
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:query"]))],
-) -> JSONResponse:
-    """获取设备列表"""
-    stmt = select(DeviceModel).order_by(DeviceModel.created_time.desc())
-    devices = (await auth.db.execute(stmt)).scalars().all()
-
-    items = [DeviceResponse.model_validate(d) for d in devices]
-    return SuccessResponse(
-        data=DeviceListResponse(items=items, total=len(items)),
-        msg="获取设备列表成功",
-    )
-
-
-@DeviceRouter.post(
-    "/create",
-    summary="创建设备",
-    description="创建新设备",
-    response_model=DeviceResponse,
-)
-async def create_device(
-    data: DeviceCreate,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:create"]))],
-) -> JSONResponse:
-    """创建设备"""
-    stmt = select(DeviceModel).where(DeviceModel.code == data.code)
-    existing = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if existing:
-        return ErrorResponse(msg=f"设备编码 '{data.code}' 已存在")
-
-    device = DeviceModel(**data.model_dump())
-    auth.db.add(device)
-    await auth.db.commit()
-    await auth.db.refresh(device)
-
-    try:
-        connection_pool.add_device(device)
-    except Exception as e:
-        log.warning(f"设备添加到连接池失败: {e}")
-
-    log.info(f"创建设备成功: {device.name}")
-    return SuccessResponse(data=DeviceResponse.model_validate(device), msg="创建设备成功")
-
-
-@DeviceRouter.get(
-    "/detail/{id}",
-    summary="获取设备详情",
-    description="获取设备详情",
-    response_model=DeviceResponse,
-)
-async def get_device(
-    id: Annotated[int, Path(description="设备ID")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:detail"]))],
-) -> JSONResponse:
-    """获取设备详情"""
-    stmt = select(DeviceModel).where(DeviceModel.id == id)
-    device = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not device:
-        return ErrorResponse(msg="设备不存在")
-
-    return SuccessResponse(data=DeviceResponse.model_validate(device), msg="获取设备详情成功")
-
-
-@DeviceRouter.put(
-    "/update/{id}",
-    summary="更新设备",
-    description="更新设备信息",
-    response_model=DeviceResponse,
-)
-async def update_device(
-    id: Annotated[int, Path(description="设备ID")],
-    data: DeviceUpdate,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:update"]))],
-) -> JSONResponse:
-    """更新设备"""
-    stmt = select(DeviceModel).where(DeviceModel.id == id)
-    device = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not device:
-        return ErrorResponse(msg="设备不存在")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(device, key, value)
-
-    await auth.db.commit()
-    await auth.db.refresh(device)
-
-    connection_pool.remove_device(id)
-    try:
-        connection_pool.add_device(device)
-    except Exception as e:
-        log.warning(f"设备重新添加到连接池失败: {e}")
-
-    log.info(f"更新设备成功: {device.name}")
-    return SuccessResponse(data=DeviceResponse.model_validate(device), msg="更新设备成功")
-
-
-@DeviceRouter.delete(
-    "/delete",
-    summary="删除设备",
-    description="删除设备",
-)
-async def delete_device(
-    ids: Annotated[list[int], Body(description="设备ID列表")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:delete"]))],
-) -> JSONResponse:
-    """删除设备"""
-    for device_id in ids:
-        stmt = select(DeviceModel).where(DeviceModel.id == device_id)
-        device = (await auth.db.execute(stmt)).scalar_one_or_none()
-        if device:
-            connection_pool.remove_device(device_id)
-            await auth.db.delete(device)
-
-    await auth.db.commit()
-    log.info(f"删除设备成功: {ids}")
-    return SuccessResponse(msg="删除设备成功")
-
-
-@DeviceRouter.post(
-    "/{id}/test",
-    summary="测试设备连接",
-    description="测试设备连接是否正常",
-)
-async def test_device_connection(
-    id: Annotated[int, Path(description="设备ID")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:device:detail"]))],
-) -> JSONResponse:
-    """测试设备连接"""
-    stmt = select(DeviceModel).where(DeviceModel.id == id)
-    device = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not device:
-        return ErrorResponse(msg="设备不存在")
-
-    client = connection_pool.acquire(id)
-    if not client:
-        return SuccessResponse(
-            data={"connected": False, "message": "无法获取连接"},
-            msg="连接测试失败",
-        )
-
-    try:
-        result = client.read_holding_registers(0, 1, slave=device.slave_id)
-        if result.get("success"):
-            return SuccessResponse(
-                data={"connected": True, "message": "连接正常"},
-                msg="连接测试成功",
-            )
-        else:
-            return SuccessResponse(
-                data={"connected": False, "message": result.get("error", "读取失败")},
-                msg="连接测试失败",
-            )
-    except Exception as e:
-        return SuccessResponse(
-            data={"connected": False, "message": str(e)},
-            msg="连接测试失败",
-        )
-    finally:
-        connection_pool.release(id, client)
-
-
-# ==================== 点位管理 ====================
-
-
-@DeviceRouter.get(
-    "/{device_id}/tag/list",
-    summary="获取点位列表",
-    description="获取设备的点位列表",
-    response_model=TagPointListResponse,
-)
-async def list_tags(
-    device_id: Annotated[int, Path(description="设备ID")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:tag:query"]))],
-) -> JSONResponse:
-    """获取设备的点位列表"""
-    stmt = (
-        select(TagPointModel)
-        .where(TagPointModel.device_id == device_id)
-        .order_by(TagPointModel.sort_order, TagPointModel.id)
-    )
-    tags = (await auth.db.execute(stmt)).scalars().all()
-
-    items = [TagPointResponse.model_validate(t) for t in tags]
-    return SuccessResponse(
-        data=TagPointListResponse(items=items, total=len(items)),
-        msg="获取点位列表成功",
-    )
-
-
-@DeviceRouter.post(
-    "/{device_id}/tag/create",
-    summary="创建点位",
-    description="创建新点位",
-    response_model=TagPointResponse,
-)
-async def create_tag(
-    device_id: Annotated[int, Path(description="设备ID")],
-    data: TagPointCreate,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:tag:create"]))],
-) -> JSONResponse:
-    """创建点位"""
-    stmt = select(DeviceModel).where(DeviceModel.id == device_id)
-    device = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not device:
-        return ErrorResponse(msg="设备不存在")
-
-    stmt = select(TagPointModel).where(
-        TagPointModel.device_id == device_id, TagPointModel.code == data.code
-    )
-    existing = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if existing:
-        return ErrorResponse(msg=f"点位编码 '{data.code}' 已存在")
-
-    tag = TagPointModel(**data.model_dump(), device_id=device_id)
-    auth.db.add(tag)
-    await auth.db.commit()
-    await auth.db.refresh(tag)
-
-    log.info(f"创建点位成功: {tag.name}")
-    return SuccessResponse(data=TagPointResponse.model_validate(tag), msg="创建点位成功")
-
-
-@DeviceRouter.put(
-    "/tag/update/{tag_id}",
-    summary="更新点位",
-    description="更新点位信息",
-    response_model=TagPointResponse,
-)
-async def update_tag(
-    tag_id: Annotated[int, Path(description="点位ID")],
-    data: TagPointUpdate,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:tag:update"]))],
-) -> JSONResponse:
-    """更新点位"""
-    stmt = select(TagPointModel).where(TagPointModel.id == tag_id)
-    tag = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not tag:
-        return ErrorResponse(msg="点位不存在")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(tag, key, value)
-
-    await auth.db.commit()
-    await auth.db.refresh(tag)
-
-    log.info(f"更新点位成功: {tag.name}")
-    return SuccessResponse(data=TagPointResponse.model_validate(tag), msg="更新点位成功")
-
-
-@DeviceRouter.delete(
-    "/tag/delete",
-    summary="删除点位",
-    description="删除点位",
-)
-async def delete_tag(
-    ids: Annotated[list[int], Body(description="点位ID列表")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:tag:delete"]))],
-) -> JSONResponse:
-    """删除点位"""
-    for tag_id in ids:
-        stmt = select(TagPointModel).where(TagPointModel.id == tag_id)
-        tag = (await auth.db.execute(stmt)).scalar_one_or_none()
-        if tag:
-            await auth.db.delete(tag)
-
-    await auth.db.commit()
-    log.info(f"删除点位成功: {ids}")
-    return SuccessResponse(msg="删除点位成功")
-
 
 # ==================== PLC 控制路由 ====================
 
@@ -362,7 +68,8 @@ ControlRouter = APIRouter(
 )
 async def connect_devices(
     device_ids: Annotated[list[int] | None, Body(description="设备ID列表")] = None,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))] = None,
+    auth: AuthSchema = Depends(AuthPermission(["module_modbus:control:write"])),
+    redis: Redis = Depends(redis_getter),
 ) -> JSONResponse:
     """连接设备"""
     stmt = select(DeviceModel).where(DeviceModel.is_active == True)
@@ -377,15 +84,15 @@ async def connect_devices(
     for device in devices:
         try:
             connection_pool.add_device(device)
-            device.status = "online"
-            device.last_seen = datetime.now(timezone.utc)
+            device.device_status = "online"
+            device.last_seen = datetime.now()
             results.append({
                 "device_id": device.id,
                 "device_name": device.name,
                 "success": True,
             })
         except ConnectionError as e:
-            device.status = "offline"
+            device.device_status = "offline"
             results.append({
                 "device_id": device.id,
                 "device_name": device.name,
@@ -393,7 +100,7 @@ async def connect_devices(
                 "error": str(e),
             })
         except Exception as e:
-            device.status = "error"
+            device.device_status = "error"
             results.append({
                 "device_id": device.id,
                 "device_name": device.name,
@@ -401,17 +108,26 @@ async def connect_devices(
                 "error": str(e),
             })
 
-    await auth.db.commit()
+    await auth.db.flush()
+
+    # 推送设备状态变化
+    for device in devices:
+        await ws_manager.send_device_status(
+            device_id=device.id,
+            device_name=device.name,
+            status=device.device_status,
+            last_seen=device.last_seen,
+        )
 
     connected_count = sum(1 for r in results if r["success"])
 
-    if connected_count > 0 and settings.MODBUS_POLL_ENABLED:
+    if connected_count > 0 and await ModbusConfigService.get(redis, "modbus_poll_enabled"):
         from app.plugin.module_modbus.control.services.poll_service import (
             poll_service,
         )
 
         if not poll_service._running:
-            poll_service.start()
+            await poll_service.start(redis)
 
     if connected_count == 0:
         if len(devices) == 1:
@@ -447,7 +163,8 @@ async def connect_devices(
 )
 async def disconnect_devices(
     device_ids: Annotated[list[int] | None, Body(description="设备ID列表")] = None,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))] = None,
+    auth: AuthSchema = Depends(AuthPermission(["module_modbus:control:write"])),
+    redis: Redis = Depends(redis_getter),
 ) -> JSONResponse:
     """断开设备连接"""
     if device_ids:
@@ -456,11 +173,17 @@ async def disconnect_devices(
             stmt = select(DeviceModel).where(DeviceModel.id == device_id)
             device = (await auth.db.execute(stmt)).scalar_one_or_none()
             if device:
-                device.status = "offline"
-        await auth.db.commit()
+                device.device_status = "offline"
+                await ws_manager.send_device_status(
+                    device_id=device.id,
+                    device_name=device.name,
+                    status="offline",
+                    last_seen=None,
+                )
+        await auth.db.flush()
         return SuccessResponse(msg=f"已断开 {len(device_ids)} 个设备连接")
     else:
-        if settings.MODBUS_POLL_ENABLED:
+        if await ModbusConfigService.get(redis, "modbus_poll_enabled"):
             from app.plugin.module_modbus.control.services.poll_service import (
                 poll_service,
             )
@@ -473,8 +196,14 @@ async def disconnect_devices(
         stmt = select(DeviceModel)
         devices = (await auth.db.execute(stmt)).scalars().all()
         for device in devices:
-            device.status = "offline"
-        await auth.db.commit()
+            device.device_status = "offline"
+            await ws_manager.send_device_status(
+                device_id=device.id,
+                device_name=device.name,
+                status="offline",
+                last_seen=None,
+            )
+        await auth.db.flush()
 
         return SuccessResponse(msg="已断开所有设备连接")
 
@@ -497,7 +226,7 @@ async def get_connection_status(
         results.append({
             "device_id": device.id,
             "device_name": device.name,
-            "status": device.status,
+            "status": device.device_status,
             "connected": health.get("healthy", False),
             "available_connections": health.get("available_connections", 0),
             "max_connections": health.get("max_connections", 0),
@@ -515,9 +244,11 @@ async def get_connection_status(
 async def chat(
     data: ChatRequest,
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
+    redis: Redis = Depends(redis_getter),
 ) -> JSONResponse:
     """对话接口 - 通过自然语言控制设备"""
-    agent_service = AgentService(auth.db)
+    config = await ModbusConfigService.get_all(redis)
+    agent_service = AgentService(auth.db, config)
 
     result = await agent_service.chat(
         user_id=auth.user.id,
@@ -536,9 +267,11 @@ async def chat(
 async def chat_stream(
     data: ChatRequest,
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
+    redis: Redis = Depends(redis_getter),
 ) -> StreamingResponse:
     """流式对话接口 - 使用 SSE 返回流式响应"""
-    agent_service = AgentService(auth.db)
+    config = await ModbusConfigService.get_all(redis)
+    agent_service = AgentService(auth.db, config)
 
     async def generate():
         async for event in agent_service.stream_chat(
@@ -567,9 +300,10 @@ async def chat_stream(
 async def read_plc(
     data: ReadRequest,
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:read"]))],
+    redis: Redis = Depends(redis_getter),
 ) -> JSONResponse:
     """直接读取 PLC 点位值"""
-    plc_service = PLCService(auth.db)
+    plc_service = PLCService(auth.db, redis)
 
     result = await plc_service.read(
         device_id=data.device_id,
@@ -600,9 +334,10 @@ async def read_plc(
 async def write_plc(
     data: WriteRequest,
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
+    redis: Redis = Depends(redis_getter),
 ) -> JSONResponse:
     """直接写入 PLC 点位值"""
-    plc_service = PLCService(auth.db)
+    plc_service = PLCService(auth.db, redis)
 
     result = await plc_service.write(
         device_id=data.device_id,
@@ -650,7 +385,7 @@ async def get_quick_commands(
         if not QUICK_COMMANDS_CONFIG_PATH.exists():
             return SuccessResponse(data={"quick_commands": []}, msg="获取成功")
 
-        with open(QUICK_COMMANDS_CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(QUICK_COMMANDS_CONFIG_PATH, encoding="utf-8") as f:
             config = json.load(f)
 
         return SuccessResponse(data=config, msg="获取成功")
@@ -658,6 +393,20 @@ async def get_quick_commands(
         return ErrorResponse(msg=f"配置文件格式错误: {str(e)}")
     except Exception as e:
         return ErrorResponse(msg=f"读取配置文件失败: {str(e)}")
+
+
+@ControlRouter.get(
+    "/config",
+    summary="获取 Modbus 配置",
+    description="获取 Modbus 控制模块的运行时配置（从 Redis 缓存获取）",
+)
+async def get_modbus_config(
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:query"]))],
+    redis: Redis = Depends(redis_getter),
+) -> JSONResponse:
+    """获取 Modbus 运行时配置"""
+    config = await ModbusConfigService.get_all(redis)
+    return SuccessResponse(data=config, msg="获取配置成功")
 
 
 # ==================== 聊天历史 ====================
@@ -675,32 +424,13 @@ async def get_chat_history_list(
     page_size: Annotated[int, Query(ge=1, le=100, description="每页数量")] = 20,
 ) -> JSONResponse:
     """获取当前用户的聊天历史列表"""
-    offset = (page - 1) * page_size
-
-    stmt = select(ChatHistoryModel).where(ChatHistoryModel.user_id == auth.user.id)
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await auth.db.execute(count_stmt)).scalar() or 0
-
-    stmt = stmt.order_by(ChatHistoryModel.created_time.desc()).offset(offset).limit(page_size)
-    histories = (await auth.db.execute(stmt)).scalars().all()
-
-    items = [
-        ChatHistoryResponse(
-            id=h.id,
-            session_id=h.session_id,
-            title=h.title,
-            device_count=h.device_count,
-            device_names=h.device_names or [],
-            start_time=h.start_time,
-            end_time=h.end_time,
-            created_time=h.created_time,
-        )
-        for h in histories
-    ]
-
-    return SuccessResponse(
-        data=ChatHistoryListResponse(items=items, total=total), msg="获取成功"
+    service = ChatHistoryService(auth.db)
+    result = await service.list(
+        user_id=auth.user.id,
+        page=page,
+        page_size=page_size,
     )
+    return SuccessResponse(data=result, msg="获取成功")
 
 
 @ControlRouter.get(
@@ -714,29 +444,13 @@ async def get_chat_history_detail(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:query"]))],
 ) -> JSONResponse:
     """获取特定会话的聊天历史详情"""
-    stmt = select(ChatHistoryModel).where(
-        ChatHistoryModel.session_id == session_id,
-        ChatHistoryModel.user_id == auth.user.id,
-    )
-    history = (await auth.db.execute(stmt)).scalar_one_or_none()
+    service = ChatHistoryService(auth.db)
+    result = await service.get_detail(session_id, auth.user.id)
 
-    if not history:
+    if not result:
         return ErrorResponse(msg="聊天历史不存在")
 
-    return SuccessResponse(
-        data=ChatHistoryDetailResponse(
-            id=history.id,
-            session_id=history.session_id,
-            title=history.title,
-            device_count=history.device_count,
-            device_names=history.device_names or [],
-            start_time=history.start_time,
-            end_time=history.end_time,
-            created_time=history.created_time,
-            messages=history.messages or [],
-        ),
-        msg="获取成功",
-    )
+    return SuccessResponse(data=result, msg="获取成功")
 
 
 @ControlRouter.post(
@@ -749,58 +463,14 @@ async def save_chat_history(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
 ) -> JSONResponse:
     """保存聊天历史"""
-    if not data.messages:
-        return ErrorResponse(msg="消息列表不能为空")
+    service = ChatHistoryService(auth.db)
+    result = await service.create(user_id=auth.user.id, data=data)
 
-    title = None
-    for msg in data.messages:
-        if msg.role == "user":
-            title = msg.content[:50] + ("..." if len(msg.content) > 50 else "")
-            break
-
-    def parse_iso_timestamp(ts: str) -> datetime:
-        if not ts:
-            return datetime.now(timezone.utc)
-        try:
-            if ts.endswith("Z"):
-                ts = ts[:-1] + "+00:00"
-            return datetime.fromisoformat(ts)
-        except Exception:
-            return datetime.now(timezone.utc)
-
-    start_time = (
-        parse_iso_timestamp(data.messages[0].timestamp)
-        if data.messages
-        else datetime.now(timezone.utc)
-    )
-    end_time = (
-        parse_iso_timestamp(data.messages[-1].timestamp)
-        if data.messages
-        else datetime.now(timezone.utc)
-    )
-
-    messages_data = [msg.model_dump() for msg in data.messages]
-
-    history = ChatHistoryModel(
-        user_id=auth.user.id,
-        session_id=data.session_id,
-        title=title,
-        messages=messages_data,
-        device_count=data.device_count,
-        device_names=data.device_names,
-        start_time=start_time,
-        end_time=end_time,
-    )
-
-    auth.db.add(history)
-    await auth.db.commit()
-    await auth.db.refresh(history)
+    if not result.get("success"):
+        return ErrorResponse(msg=result.get("message", "保存失败"))
 
     return SuccessResponse(
-        data={
-            "id": history.id,
-            "session_id": history.session_id,
-        },
+        data={"id": result["id"], "session_id": result["session_id"]},
         msg="聊天历史已保存",
     )
 
@@ -815,19 +485,13 @@ async def delete_chat_history(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
 ) -> JSONResponse:
     """删除特定会话的聊天历史"""
-    stmt = select(ChatHistoryModel).where(
-        ChatHistoryModel.session_id == session_id,
-        ChatHistoryModel.user_id == auth.user.id,
-    )
-    history = (await auth.db.execute(stmt)).scalar_one_or_none()
+    service = ChatHistoryService(auth.db)
+    result = await service.delete(session_id, auth.user.id)
 
-    if not history:
-        return ErrorResponse(msg="聊天历史不存在")
+    if not result.get("success"):
+        return ErrorResponse(msg=result.get("message", "删除失败"))
 
-    await auth.db.delete(history)
-    await auth.db.commit()
-
-    return SuccessResponse(msg="聊天历史已删除")
+    return SuccessResponse(msg=result["message"])
 
 
 @ControlRouter.delete(
@@ -839,11 +503,9 @@ async def clear_all_chat_history(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
 ) -> JSONResponse:
     """清空当前用户的所有聊天历史"""
-    stmt = delete(ChatHistoryModel).where(ChatHistoryModel.user_id == auth.user.id)
-    result = await auth.db.execute(stmt)
-    await auth.db.commit()
-
-    return SuccessResponse(msg=f"已清空 {result.rowcount} 条聊天历史")
+    service = ChatHistoryService(auth.db)
+    result = await service.clear_all(auth.user.id)
+    return SuccessResponse(msg=result["message"])
 
 
 # ==================== 操作日志路由 ====================
@@ -871,32 +533,17 @@ async def list_logs(
     page_size: Annotated[int, Query(ge=1, le=100, description="每页数量")] = 20,
 ) -> JSONResponse:
     """获取操作日志列表"""
-    stmt = select(CommandLogModel)
-
-    if device_id:
-        stmt = stmt.where(CommandLogModel.device_id == device_id)
-    if user_id:
-        stmt = stmt.where(CommandLogModel.user_id == user_id)
-    if action:
-        stmt = stmt.where(CommandLogModel.action == action)
-    if status:
-        stmt = stmt.where(CommandLogModel.status == status)
-    if start_time:
-        stmt = stmt.where(CommandLogModel.created_time >= start_time)
-    if end_time:
-        stmt = stmt.where(CommandLogModel.created_time <= end_time)
-
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await auth.db.execute(count_stmt)).scalar() or 0
-
-    offset = (page - 1) * page_size
-    stmt = stmt.order_by(CommandLogModel.created_time.desc()).offset(offset).limit(page_size)
-    logs = (await auth.db.execute(stmt)).scalars().all()
-
-    items = [CommandLogResponse.model_validate(log) for log in logs]
-    return SuccessResponse(
-        data=CommandLogListResponse(items=items, total=total), msg="获取成功"
+    filter_params = CommandLogFilter(
+        device_id=device_id,
+        user_id=user_id,
+        action=action,
+        status=status,
+        start_time=start_time,
+        end_time=end_time,
     )
+    service = CommandLogService(auth.db)
+    result = await service.list(filter_params=filter_params, page=page, page_size=page_size)
+    return SuccessResponse(data=result, msg="获取成功")
 
 
 @LogRouter.get(
@@ -910,13 +557,13 @@ async def get_log(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:log:detail"]))],
 ) -> JSONResponse:
     """获取操作日志详情"""
-    stmt = select(CommandLogModel).where(CommandLogModel.id == id)
-    log_entry = (await auth.db.execute(stmt)).scalar_one_or_none()
+    service = CommandLogService(auth.db)
+    result = await service.get_detail(id)
 
-    if not log_entry:
+    if not result:
         return ErrorResponse(msg="日志不存在")
 
-    return SuccessResponse(data=CommandLogResponse.model_validate(log_entry), msg="获取成功")
+    return SuccessResponse(data=result, msg="获取成功")
 
 
 # ==================== 待确认操作路由 ====================
@@ -937,20 +584,9 @@ async def list_pending(
     status: Annotated[str | None, Query(description="状态筛选")] = None,
 ) -> JSONResponse:
     """获取待确认操作列表"""
-    stmt = select(PendingConfirmModel)
-
-    if status:
-        stmt = stmt.where(PendingConfirmModel.status == status)
-    else:
-        stmt = stmt.where(PendingConfirmModel.status == "pending")
-
-    stmt = stmt.order_by(PendingConfirmModel.created_time.desc())
-    pendings = (await auth.db.execute(stmt)).scalars().all()
-
-    items = [PendingConfirmResponse.model_validate(p) for p in pendings]
-    return SuccessResponse(
-        data=PendingConfirmListResponse(items=items, total=len(items)), msg="获取成功"
-    )
+    service = PendingConfirmService(auth.db)
+    result = await service.list(status=status)
+    return SuccessResponse(data=result, msg="获取成功")
 
 
 @PendingRouter.post(
@@ -962,58 +598,20 @@ async def confirm_operation(
     pending_id: Annotated[int, Path(description="待确认ID")],
     data: ConfirmAction,
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
+    redis: Redis = Depends(redis_getter),
 ) -> JSONResponse:
     """确认操作"""
-    stmt = select(PendingConfirmModel).where(PendingConfirmModel.id == pending_id)
-    pending = (await auth.db.execute(stmt)).scalar_one_or_none()
-
-    if not pending:
-        return ErrorResponse(msg="待确认记录不存在")
-
-    if pending.status != "pending":
-        return ErrorResponse(msg=f"该操作已处理，状态: {pending.status}")
-
-    if pending.expires_at and datetime.now() > pending.expires_at:
-        pending.status = "expired"
-        await auth.db.commit()
-        return ErrorResponse(msg="操作已过期")
-
-    stmt = select(DeviceModel).where(DeviceModel.name == pending.device_name)
-    device = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not device:
-        return ErrorResponse(msg=f"设备 '{pending.device_name}' 不存在")
-
-    stmt = select(TagPointModel).where(
-        TagPointModel.device_id == device.id, TagPointModel.name == pending.tag_name
-    )
-    tag = (await auth.db.execute(stmt)).scalar_one_or_none()
-    if not tag:
-        return ErrorResponse(msg=f"点位 '{pending.tag_name}' 不存在")
-
-    plc_service = PLCService(auth.db)
-    result = await plc_service.write(
-        device_id=device.id,
-        tag_code=tag.code,
-        value=pending.target_value,
+    service = PendingConfirmService(auth.db, redis)
+    result = await service.confirm(
+        pending_id=pending_id,
         user_id=auth.user.id,
+        data=data,
     )
 
-    pending.status = "confirmed"
-    pending.reviewed_by = auth.user.id
-    pending.reviewed_at = datetime.now()
-    pending.review_comment = data.comment
-    await auth.db.commit()
+    if not result.get("success"):
+        return ErrorResponse(msg=result.get("message", "确认失败"))
 
-    if result["success"]:
-        return SuccessResponse(
-            data={
-                "message": "操作已确认并执行",
-                "result": result,
-            },
-            msg="操作成功",
-        )
-    else:
-        return ErrorResponse(msg=f"执行失败: {result['message']}")
+    return SuccessResponse(data=result, msg="操作成功")
 
 
 @PendingRouter.post(
@@ -1027,111 +625,14 @@ async def reject_operation(
     auth: Annotated[AuthSchema, Depends(AuthPermission(["module_modbus:control:write"]))],
 ) -> JSONResponse:
     """拒绝操作"""
-    stmt = select(PendingConfirmModel).where(PendingConfirmModel.id == pending_id)
-    pending = (await auth.db.execute(stmt)).scalar_one_or_none()
-
-    if not pending:
-        return ErrorResponse(msg="待确认记录不存在")
-
-    if pending.status != "pending":
-        return ErrorResponse(msg=f"该操作已处理，状态: {pending.status}")
-
-    pending.status = "rejected"
-    pending.reviewed_by = auth.user.id
-    pending.reviewed_at = datetime.now()
-    pending.review_comment = data.comment
-    await auth.db.commit()
-
-    return SuccessResponse(msg="操作已拒绝")
-
-
-# ==================== WebSocket 路由 ====================
-
-WSModbus = APIRouter(
-    route_class=OperationLogRoute,
-    prefix="/ws/modbus",
-    tags=["Modbus WebSocket"],
-)
-
-
-@WSModbus.websocket("", name="Modbus实时通信")
-async def websocket_modbus_controller(
-    websocket: WebSocket,
-) -> None:
-    """
-    Modbus WebSocket 实时通信接口
-
-    功能：
-    - 设备状态实时推送
-    - 点位值变化实时推送
-    - 操作结果实时推送
-    - 待确认操作通知
-
-    连接地址: ws://127.0.0.1:8001/api/v1/ws/modbus?token=xxx
-
-    消息格式（服务端推送）:
-    - 设备状态: {"type": "device_status", "data": {...}}
-    - 点位值变化: {"type": "tag_value", "data": {...}}
-    - 操作结果: {"type": "operation_result", "data": {...}}
-    - 待确认通知: {"type": "pending_confirm", "data": {...}}
-
-    客户端消息:
-    - 心跳: {"type": "ping"}
-    """
-    from app.core.database import async_db_session
-    from app.core.dependencies import _verify_token
-    from app.plugin.module_modbus.control.services.websocket_service import (
-        websocket_endpoint,
+    service = PendingConfirmService(auth.db)
+    result = await service.reject(
+        pending_id=pending_id,
+        user_id=auth.user.id,
+        data=data,
     )
 
-    await websocket.accept()
+    if not result.get("success"):
+        return ErrorResponse(msg=result.get("message", "拒绝失败"))
 
-    # 从查询参数获取token并认证
-    token = websocket.query_params.get("token")
-    if not token:
-        logger.warning(f"WebSocket连接未提供token: {websocket.client}")
-        try:
-            await websocket.send_json({"type": "error", "message": "未提供认证token"})
-        except RuntimeError:
-            pass
-        finally:
-            try:
-                await websocket.close()
-            except RuntimeError:
-                pass
-        return
-
-    try:
-        async with async_db_session() as db:
-            redis = websocket.app.state.redis
-            auth = await _verify_token(token, db, redis)
-
-            if not auth or not auth.user:
-                logger.warning(f"WebSocket认证失败: {websocket.client}")
-                try:
-                    await websocket.send_json({"type": "error", "message": "认证失败"})
-                except RuntimeError:
-                    pass
-                finally:
-                    try:
-                        await websocket.close()
-                    except RuntimeError:
-                        pass
-                return
-
-            logger.info(f"Modbus WebSocket已连接: {websocket.client} - 用户: {auth.user.username}")
-
-            # 调用 WebSocket 端点处理
-            await websocket_endpoint(websocket, auth.user.id)
-
-    except Exception as e:
-        logger.error(f"WebSocket异常: {e}")
-        try:
-            await websocket.send_json({"type": "error", "message": str(e)})
-        except RuntimeError:
-            pass
-        finally:
-            try:
-                await websocket.close()
-            except RuntimeError:
-                pass
+    return SuccessResponse(msg=result["message"])

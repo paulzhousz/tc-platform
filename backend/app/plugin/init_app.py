@@ -140,10 +140,14 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(monitor_router, dependencies=[Depends(RateLimiter(times=5, seconds=10))])
 
     from app.plugin.module_ai.chat.ws import WS_AI
+    from app.plugin.module_modbus.control.ws import WSModbus
 
     # 手动注册WebSocket路由，不使用速率限制器
     app.include_router(
         router=WS_AI, dependencies=[Depends(WebSocketRateLimiter(times=1, seconds=5))]
+    )
+    app.include_router(
+        router=WSModbus, dependencies=[Depends(WebSocketRateLimiter(times=1, seconds=5))]
     )
     # 先将动态路由注册到应用，使用速率限制器
     from app.core.discover import get_dynamic_router

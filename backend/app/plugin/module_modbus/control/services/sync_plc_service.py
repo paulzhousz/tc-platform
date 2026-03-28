@@ -12,13 +12,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config.setting import settings
-from app.plugin.module_modbus.control.services.client_factory import IModbusClient
 from app.plugin.module_modbus.control.services.connection_pool import connection_pool
 from app.plugin.module_modbus.models import (
     CommandLogModel,
     DeviceModel,
-    PendingConfirmModel,
     TagPointModel,
 )
 
@@ -398,7 +395,7 @@ class SyncPLCService:
                 "device_id": device.id,
                 "device_name": device.name,
                 "device_code": device.code,
-                "status": device.status,
+                "status": device.device_status,
                 "match_score": score,
             })
 

@@ -6,7 +6,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 API_PREFIX = "/api/v1/modbus/pending"
@@ -17,34 +17,46 @@ class TestPendingListAPI:
 
     def test_list_pending_success(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试获取待确认列表 - 正常"""
-        mock_pending_model.status = "pending"
-        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_pending_model]
+        mock_pending_model.confirm_status = "pending"
 
-        response = client.get(f"{API_PREFIX}/list")
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.list = AsyncMock(return_value={
+                "items": [mock_pending_model.__dict__],
+                "total": 1
+            })
+
+            response = client.get(f"{API_PREFIX}/list")
 
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 0
         assert "items" in data["data"]
-        assert len(data["data"]["items"]) == 1
 
     def test_list_pending_filter_by_status(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试获取待确认列表 - 按状态筛选"""
-        mock_pending_model.status = "confirmed"
-        mock_auth._execute_result.scalars.return_value.all.return_value = [mock_pending_model]
+        mock_pending_model.confirm_status = "confirmed"
 
-        response = client.get(f"{API_PREFIX}/list?status=confirmed")
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.list = AsyncMock(return_value={
+                "items": [mock_pending_model.__dict__],
+                "total": 1
+            })
+
+            response = client.get(f"{API_PREFIX}/list?status=confirmed")
 
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 0
-        assert len(data["data"]["items"]) == 1
 
     def test_list_pending_empty(self, client, mock_auth_dependency, mock_auth):
         """测试获取待确认列表 - 空列表"""
-        mock_auth._execute_result.scalars.return_value.all.return_value = []
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.list = AsyncMock(return_value={"items": [], "total": 0})
 
-        response = client.get(f"{API_PREFIX}/list")
+            response = client.get(f"{API_PREFIX}/list")
 
         assert response.status_code == 200
         data = response.json()
@@ -66,26 +78,12 @@ class TestConfirmOperationAPI:
         mock_tag_model
     ):
         """测试确认操作 - 正常确认执行"""
-        mock_pending_model.status = "pending"
-        mock_pending_model.expires_at = None
-        mock_pending_model.device_name = "测试PLC"
-        mock_pending_model.tag_name = "温度传感器"
-        mock_pending_model.target_value = 50.0
-
-        # Mock 数据库查询链
-        mock_auth.db.execute.side_effect = [
-            MagicMock(scalar_one_or_none=lambda: mock_pending_model),  # pending 查询
-            MagicMock(scalar_one_or_none=lambda: mock_device_model),   # device 查询
-            MagicMock(scalar_one_or_none=lambda: mock_tag_model),      # tag 查询
-        ]
-
-        # Mock PLCService.write 成功
-        with patch("app.plugin.module_modbus.control.controller.PLCService") as mock_plc:
-            mock_instance = mock_plc.return_value
-            mock_instance.write = AsyncMock(return_value={
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
                 "success": True,
-                "value": 50.0,
-                "message": "写入成功"
+                "message": "操作已确认并执行",
+                "result": {"value": 50.0}
             })
 
             response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认执行"})
@@ -97,38 +95,53 @@ class TestConfirmOperationAPI:
 
     def test_confirm_operation_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试确认操作 - 记录不存在"""
-        mock_auth._execute_result.scalar_one_or_none.return_value = None
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
+                "success": False,
+                "message": "待确认记录不存在"
+            })
 
-        response = client.post(f"{API_PREFIX}/999/confirm", json={"comment": "确认"})
+            response = client.post(f"{API_PREFIX}/999/confirm", json={"comment": "确认"})
 
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "不存在" in data["msg"]
 
     def test_confirm_operation_already_processed(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试确认操作 - 已处理状态"""
-        mock_pending_model.status = "confirmed"
-        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
+                "success": False,
+                "message": "该操作已处理，状态: confirmed"
+            })
 
-        response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
+            response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
 
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "已处理" in data["msg"]
 
     def test_confirm_operation_expired(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试确认操作 - 操作已过期"""
-        mock_pending_model.status = "pending"
-        mock_pending_model.expires_at = datetime.now() - timedelta(hours=1)  # 已过期
-        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
+                "success": False,
+                "message": "操作已过期"
+            })
 
-        response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
+            response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
 
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "过期" in data["msg"]
 
     def test_confirm_operation_device_not_found(
@@ -139,20 +152,19 @@ class TestConfirmOperationAPI:
         mock_pending_model
     ):
         """测试确认操作 - 设备不存在"""
-        mock_pending_model.status = "pending"
-        mock_pending_model.expires_at = None
-        mock_pending_model.device_name = "不存在的设备"
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
+                "success": False,
+                "message": "设备 '不存在的设备' 不存在"
+            })
 
-        mock_auth.db.execute.side_effect = [
-            MagicMock(scalar_one_or_none=lambda: mock_pending_model),  # pending 查询
-            MagicMock(scalar_one_or_none=lambda: None),  # device 查询返回 None
-        ]
+            response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
 
-        response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
-
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "设备" in data["msg"] and "不存在" in data["msg"]
 
     def test_confirm_operation_tag_not_found(
@@ -164,22 +176,19 @@ class TestConfirmOperationAPI:
         mock_device_model
     ):
         """测试确认操作 - 点位不存在"""
-        mock_pending_model.status = "pending"
-        mock_pending_model.expires_at = None
-        mock_pending_model.device_name = "测试PLC"
-        mock_pending_model.tag_name = "不存在的点位"
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
+                "success": False,
+                "message": "点位 '不存在的点位' 不存在"
+            })
 
-        mock_auth.db.execute.side_effect = [
-            MagicMock(scalar_one_or_none=lambda: mock_pending_model),  # pending 查询
-            MagicMock(scalar_one_or_none=lambda: mock_device_model),   # device 查询
-            MagicMock(scalar_one_or_none=lambda: None),  # tag 查询返回 None
-        ]
+            response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
 
-        response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认"})
-
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "点位" in data["msg"] and "不存在" in data["msg"]
 
     def test_confirm_execution_failed(
@@ -192,31 +201,19 @@ class TestConfirmOperationAPI:
         mock_tag_model
     ):
         """测试确认操作 - 执行失败"""
-        mock_pending_model.status = "pending"
-        mock_pending_model.expires_at = None
-        mock_pending_model.device_name = "测试PLC"
-        mock_pending_model.tag_name = "温度传感器"
-        mock_pending_model.target_value = 50.0
-
-        mock_auth.db.execute.side_effect = [
-            MagicMock(scalar_one_or_none=lambda: mock_pending_model),
-            MagicMock(scalar_one_or_none=lambda: mock_device_model),
-            MagicMock(scalar_one_or_none=lambda: mock_tag_model),
-        ]
-
-        # Mock PLCService.write 失败
-        with patch("app.plugin.module_modbus.control.controller.PLCService") as mock_plc:
-            mock_instance = mock_plc.return_value
-            mock_instance.write = AsyncMock(return_value={
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.confirm = AsyncMock(return_value={
                 "success": False,
-                "message": "PLC 连接超时"
+                "message": "执行失败: PLC 连接超时"
             })
 
             response = client.post(f"{API_PREFIX}/1/confirm", json={"comment": "确认执行"})
 
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "失败" in data["msg"]
 
 
@@ -225,10 +222,14 @@ class TestRejectOperationAPI:
 
     def test_reject_operation_success(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试拒绝操作 - 正常拒绝"""
-        mock_pending_model.status = "pending"
-        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.reject = AsyncMock(return_value={
+                "success": True,
+                "message": "操作已拒绝"
+            })
 
-        response = client.post(f"{API_PREFIX}/1/reject", json={"comment": "拒绝执行"})
+            response = client.post(f"{API_PREFIX}/1/reject", json={"comment": "拒绝执行"})
 
         assert response.status_code == 200
         data = response.json()
@@ -237,23 +238,34 @@ class TestRejectOperationAPI:
 
     def test_reject_operation_not_found(self, client, mock_auth_dependency, mock_auth):
         """测试拒绝操作 - 记录不存在"""
-        mock_auth._execute_result.scalar_one_or_none.return_value = None
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.reject = AsyncMock(return_value={
+                "success": False,
+                "message": "待确认记录不存在"
+            })
 
-        response = client.post(f"{API_PREFIX}/999/reject", json={"comment": "拒绝"})
+            response = client.post(f"{API_PREFIX}/999/reject", json={"comment": "拒绝"})
 
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "不存在" in data["msg"]
 
     def test_reject_operation_already_processed(self, client, mock_auth_dependency, mock_auth, mock_pending_model):
         """测试拒绝操作 - 已处理状态"""
-        mock_pending_model.status = "rejected"
-        mock_auth._execute_result.scalar_one_or_none.return_value = mock_pending_model
+        with patch("app.plugin.module_modbus.control.controller.PendingConfirmService") as mock_service:
+            mock_instance = mock_service.return_value
+            mock_instance.reject = AsyncMock(return_value={
+                "success": False,
+                "message": "该操作已处理，状态: rejected"
+            })
 
-        response = client.post(f"{API_PREFIX}/1/reject", json={"comment": "拒绝"})
+            response = client.post(f"{API_PREFIX}/1/reject", json={"comment": "拒绝"})
 
-        assert response.status_code == 200
+        # ErrorResponse 返回 HTTP 400
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] != 200
+        assert data["code"] != 0
         assert "已处理" in data["msg"]

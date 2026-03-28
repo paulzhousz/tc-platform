@@ -1,5 +1,7 @@
 # Modbus 控制模块需求规格
 
+> 同步自变更: add-modbus-module (2026-03-28)
+
 ## 1. 功能需求清单
 
 ### 1.1 设备管理 (FR-DEV)
@@ -78,19 +80,19 @@
 
 | 权限码 | 描述 |
 |--------|------|
-| modbus:device:view | 查看设备 |
-| modbus:device:create | 创建设备 |
-| modbus:device:update | 更新设备 |
-| modbus:device:delete | 删除设备 |
-| modbus:tag:view | 查看点位 |
-| modbus:tag:create | 创建点位 |
-| modbus:tag:update | 更新点位 |
-| modbus:tag:delete | 删除点位 |
-| modbus:control:read | 读取控制权限 |
-| modbus:control:write | 写入控制权限 |
-| modbus:log:view | 查看日志 |
-| modbus:pending:view | 查看待确认 |
-| modbus:pending:confirm | 确认/拒绝操作 |
+| module_modbus:device:query | 查看设备列表 |
+| module_modbus:device:detail | 查看设备详情 |
+| module_modbus:device:create | 创建设备 |
+| module_modbus:device:update | 更新设备 |
+| module_modbus:device:delete | 删除设备 |
+| module_modbus:tag:query | 查看点位列表 |
+| module_modbus:tag:create | 创建点位 |
+| module_modbus:tag:update | 更新点位 |
+| module_modbus:tag:delete | 删除点位 |
+| module_modbus:control:query | 查询控制权限（连接状态、配置、快捷指令） |
+| module_modbus:control:write | 写入控制权限（连接、断开、对话、读写、确认操作） |
+| module_modbus:log:query | 查看日志列表 |
+| module_modbus:log:detail | 查看日志详情 |
 
 ## 3. API 端点清单
 
@@ -98,15 +100,16 @@
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | /modbus/devices | 获取设备列表 |
-| POST | /modbus/devices | 创建设备 |
-| GET | /modbus/devices/{id} | 获取设备详情 |
-| PUT | /modbus/devices/{id} | 更新设备 |
-| DELETE | /modbus/devices | 删除设备 |
-| GET | /modbus/devices/{id}/tags | 获取设备点位列表 |
-| POST | /modbus/devices/{id}/tags | 创建点位 |
-| PUT | /modbus/devices/tags/{id} | 更新点位 |
-| DELETE | /modbus/devices/tags | 删除点位 |
+| GET | /modbus/device/list | 获取设备列表 |
+| POST | /modbus/device/create | 创建设备 |
+| GET | /modbus/device/detail/{id} | 获取设备详情 |
+| PUT | /modbus/device/update/{id} | 更新设备 |
+| DELETE | /modbus/device/delete | 删除设备 |
+| POST | /modbus/device/{id}/test | 测试设备连接 |
+| GET | /modbus/device/{device_id}/tag/list | 获取设备点位列表 |
+| POST | /modbus/device/{device_id}/tag/create | 创建点位 |
+| PUT | /modbus/device/tag/update/{tag_id} | 更新点位 |
+| DELETE | /modbus/device/tag/delete | 删除点位 |
 
 ### 控制操作 API
 
@@ -115,6 +118,7 @@
 | POST | /modbus/control/connect | 连接设备 |
 | POST | /modbus/control/disconnect | 断开设备 |
 | GET | /modbus/control/connection-status | 获取连接状态 |
+| GET | /modbus/control/config | 获取运行时配置 |
 | POST | /modbus/control/chat | 对话接口 |
 | POST | /modbus/control/chat/stream | 流式对话接口 |
 | POST | /modbus/control/read | 直接读取 PLC |
@@ -125,14 +129,14 @@
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | /modbus/logs | 获取日志列表 |
-| GET | /modbus/logs/{id} | 获取日志详情 |
+| GET | /modbus/log/list | 获取日志列表 |
+| GET | /modbus/log/detail/{id} | 获取日志详情 |
 
 ### 待确认 API
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | /modbus/pending | 获取待确认列表 |
+| GET | /modbus/pending/list | 获取待确认列表 |
 | POST | /modbus/pending/{id}/confirm | 确认操作 |
 | POST | /modbus/pending/{id}/reject | 拒绝操作 |
 
@@ -140,13 +144,14 @@
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| GET | /modbus/chat-history | 获取历史列表 |
-| GET | /modbus/chat-history/{session_id} | 获取历史详情 |
-| POST | /modbus/chat-history | 保存历史 |
-| DELETE | /modbus/chat-history/{session_id} | 删除历史 |
+| GET | /modbus/control/chat-history | 获取历史列表 |
+| GET | /modbus/control/chat-history/{session_id} | 获取历史详情 |
+| POST | /modbus/control/chat-history | 保存历史 |
+| DELETE | /modbus/control/chat-history/{session_id} | 删除历史 |
+| DELETE | /modbus/control/chat-history | 清空所有历史 |
 
 ### WebSocket
 
 | 路径 | 描述 |
 |------|------|
-| /ws/modbus | WebSocket 连接端点 |
+| /api/v1/ws/modbus | WebSocket 连接端点 |

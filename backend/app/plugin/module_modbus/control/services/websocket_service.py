@@ -25,7 +25,7 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, user_id: int):
         """建立连接"""
-        await websocket.accept()
+        # 注意：websocket.accept() 已在控制器层调用，这里只负责连接管理
 
         async with self._lock:
             if user_id not in self._connections:

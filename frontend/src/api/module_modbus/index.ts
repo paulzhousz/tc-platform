@@ -30,7 +30,7 @@ export type {
   StreamEvent,
   ReadRequest,
   WriteRequest,
-  AdjustRequest,
+  ModbusConfig,
 } from "./control";
 
 // Log types

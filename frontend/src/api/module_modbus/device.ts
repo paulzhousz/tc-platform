@@ -17,7 +17,7 @@ export interface Device {
   slave_id: number;
   baud_rate?: number;
   parity?: string;
-  status: "online" | "offline" | "error";
+  device_status: "online" | "offline" | "error";
   last_seen?: string;
   created_time: string;
   updated_time?: string;
@@ -88,12 +88,12 @@ const DeviceAPI = {
     });
   },
 
-  /** 删除设备 */
-  delete(deviceId: number) {
+  /** 删除设备 - 通过 body 传递 id 数组，支持批量删除 */
+  delete(ids: number[]) {
     return request<ApiResponse<{ message: string }>>({
       url: `${API_PATH}/device/delete`,
       method: "delete",
-      params: { id: deviceId },
+      data: ids,
     });
   },
 
@@ -124,12 +124,20 @@ const DeviceAPI = {
     });
   },
 
-  /** 删除点位 */
-  deleteTag(tagId: number) {
+  /** 删除点位 - 通过 body 传递 id 数组，支持批量删除 */
+  deleteTag(ids: number[]) {
     return request<ApiResponse<{ message: string }>>({
       url: `${API_PATH}/device/tag/delete`,
       method: "delete",
-      params: { id: tagId },
+      data: ids,
+    });
+  },
+
+  /** 测试设备连接 */
+  testConnection(deviceId: number) {
+    return request<ApiResponse<{ connected: boolean; message: string }>>({
+      url: `${API_PATH}/device/${deviceId}/test`,
+      method: "post",
     });
   },
 };
@@ -138,6 +146,7 @@ export default DeviceAPI;
 
 // ==================== Parameter Types ====================
 
+/** 设备列表查询参数 */
 export interface DeviceListParams {
   group?: string;
   status?: string;
@@ -176,7 +185,7 @@ export interface DeviceUpdateData {
 export interface TagPointListParams {
   name?: string;
   register_type?: string;
-  page?: number;
+  page_no?: number;
   page_size?: number;
   is_active?: boolean;
 }

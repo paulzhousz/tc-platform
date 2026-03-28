@@ -66,6 +66,17 @@ const ParamsAPI = {
       responseType: "blob",
     });
   },
+
+  /**
+   * 根据配置键获取参数值
+   * @param configKey 配置键名
+   */
+  getValueByKey(configKey: string) {
+    return request<ApiResponse<string>>({
+      url: `${API_PATH}/value/${configKey}`,
+      method: "get",
+    });
+  },
 };
 
 export default ParamsAPI;

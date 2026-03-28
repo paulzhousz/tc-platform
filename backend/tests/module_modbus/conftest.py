@@ -124,6 +124,8 @@ def mock_user():
 @pytest.fixture
 def mock_auth(mock_user):
     """Mock AuthSchema 认证对象"""
+    from datetime import datetime
+
     auth = MagicMock()
     auth.user = mock_user
     auth.check_data_scope = False
@@ -139,11 +141,28 @@ def mock_auth(mock_user):
     auth.db.execute = AsyncMock(return_value=auth._execute_result)
     auth.db.commit = AsyncMock(return_value=None)
     auth.db.rollback = AsyncMock(return_value=None)
-    auth.db.refresh = AsyncMock(return_value=None)
-    auth.db.add = MagicMock(return_value=None)
-    auth.db.delete = MagicMock(return_value=None)
     auth.db.flush = AsyncMock(return_value=None)
     auth.db.merge = AsyncMock(return_value=None)
+
+    # refresh 需要更新对象的属性
+    async def mock_refresh(obj, *args, **kwargs):
+        """模拟 refresh，更新对象的数据库生成属性"""
+        if hasattr(obj, 'id') and obj.id is None:
+            obj.id = 1
+        # device_status 必须有值
+        if not hasattr(obj, 'device_status') or obj.device_status is None:
+            obj.device_status = "offline"
+        if hasattr(obj, 'created_time') and obj.created_time is None:
+            obj.created_time = datetime(2026, 3, 25, 10, 0, 0)
+        if hasattr(obj, 'updated_time'):
+            obj.updated_time = datetime(2026, 3, 25, 10, 0, 0)
+        if hasattr(obj, 'last_seen'):
+            obj.last_seen = None
+        return None
+
+    auth.db.refresh = AsyncMock(side_effect=mock_refresh)
+    auth.db.add = MagicMock(return_value=None)
+    auth.db.delete = AsyncMock(return_value=None)  # 必须是 AsyncMock，因为代码中使用 await db.delete()
     return auth
 
 
@@ -271,7 +290,7 @@ def mock_device_model():
             self.host = "192.168.1.100"
             self.port = 502
             self.slave_id = 1
-            self.status = "online"
+            self.device_status = "online"  # 与数据库模型字段名一致
             self.connection_type = "TCP"
             self.description = "测试用PLC设备"
             self.group_name = "测试分组"
@@ -333,7 +352,7 @@ def mock_log_model():
             self.action = "read"
             self.request_value = 25.5
             self.actual_value = 25.5
-            self.status = "success"
+            self.log_status = "success"
             self.error_message = None
             self.confirmation_required = False
             self.confirmed_by = None
@@ -351,32 +370,44 @@ def mock_log_model():
 @pytest.fixture
 def mock_pending_model():
     """Mock 待确认操作 ORM 模型"""
-    pending = MagicMock()
-    pending.id = 1
-    pending.device_name = "测试PLC"
-    pending.tag_name = "温度传感器"
-    pending.target_value = 50.0
-    pending.status = "pending"
-    pending.reason = "需要确认"
-    pending.created_time = "2026-03-25T10:00:00"
-    pending.expires_at = None
-    pending.reviewed_by = None
-    pending.reviewed_at = None
-    pending.review_comment = None
-    return pending
+    from datetime import datetime
+
+    class MockPendingConfirm:
+        def __init__(self):
+            self.id = 1
+            self.command_log_id = 1
+            self.device_name = "测试PLC"
+            self.tag_name = "温度传感器"
+            self.target_value = 50.0
+            self.unit = "°C"
+            self.confirm_status = "pending"
+            self.expires_at = None
+            self.reviewed_by = None
+            self.reviewed_at = None
+            self.review_comment = None
+            self.user_input = "将温度设为50度"
+            self.ai_explanation = "用户请求修改温度设定值"
+            self.created_time = datetime(2026, 3, 25, 10, 0, 0)
+
+    return MockPendingConfirm()
 
 
 @pytest.fixture
 def mock_chat_history_model():
     """Mock 聊天历史 ORM 模型"""
-    history = MagicMock()
-    history.id = 1
-    history.session_id = "session-123"
-    history.title = "测试会话"
-    history.device_count = 1
-    history.device_names = ["测试PLC"]
-    history.messages = []
-    history.start_time = "2026-03-25T10:00:00"
-    history.end_time = "2026-03-25T10:30:00"
-    history.created_time = "2026-03-25T10:00:00"
-    return history
+    from datetime import datetime
+
+    class MockChatHistory:
+        def __init__(self):
+            self.id = 1
+            self.session_id = "session-123"
+            self.title = "测试会话"
+            self.device_count = 1
+            self.device_names = ["测试PLC"]
+            self.start_time = datetime(2026, 3, 25, 10, 0, 0)
+            self.end_time = datetime(2026, 3, 25, 10, 30, 0)
+            self.created_time = datetime(2026, 3, 25, 10, 0, 0)
+            self.user_id = 1  # 添加 user_id 属性
+            self.messages = []  # 添加 messages 属性
+
+    return MockChatHistory()

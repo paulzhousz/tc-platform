@@ -43,8 +43,8 @@ export const useModbusStore = defineStore("modbus", {
   }),
 
   getters: {
-    onlineDevices: (state) => state.devices.filter((d) => d.status === "online"),
-    offlineDevices: (state) => state.devices.filter((d) => d.status !== "online"),
+    onlineDevices: (state) => state.devices.filter((d) => d.device_status === "online"),
+    offlineDevices: (state) => state.devices.filter((d) => d.device_status !== "online"),
     deviceTree: (state) => {
       const groups: Record<string, Device[]> = {};
       state.devices.forEach((device) => {
@@ -235,7 +235,11 @@ export const useModbusStore = defineStore("modbus", {
       this.messages = [];
       this.sessionId = "";
       if (this.abortStream) {
-        this.abortStream();
+        try {
+          this.abortStream();
+        } catch {
+          // 忽略 abort 可能的错误（如已完成的请求）
+        }
         this.abortStream = null;
       }
     },
@@ -261,7 +265,7 @@ export const useModbusStore = defineStore("modbus", {
       this.chatHistoryLoading = true;
       try {
         const result = await ControlAPI.getChatHistoryList({
-          page: 1,
+          page_no: 1,
           page_size: MAX_HISTORY_SESSIONS,
         });
         this.chatHistory = (result.data.data?.items || []).map((item) => ({
@@ -313,6 +317,35 @@ export const useModbusStore = defineStore("modbus", {
       }
     },
 
+    async saveChatHistory(deviceCount: number = 0, deviceNames: string[] = []) {
+      // 消息为空时不保存
+      if (this.messages.length === 0 || !this.sessionId) {
+        return { success: false, reason: "no_messages" };
+      }
+
+      try {
+        await ControlAPI.saveChatHistory({
+          session_id: this.sessionId,
+          messages: this.messages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp,
+            actions: msg.actions,
+          })),
+          device_count: deviceCount,
+          device_names: deviceNames,
+        });
+
+        // 刷新历史列表
+        await this.loadChatHistory();
+
+        return { success: true };
+      } catch (error) {
+        console.error("Failed to save chat history:", error);
+        return { success: false, reason: "error" };
+      }
+    },
+
     // ==================== 连接操作 ====================
 
     async loadConnectionStatus() {
@@ -358,7 +391,7 @@ export const useModbusStore = defineStore("modbus", {
     updateDeviceStatus(deviceId: number, status: string, lastSeen?: string) {
       const device = this.devices.find((d) => d.id === deviceId);
       if (device) {
-        device.status = status as Device["status"];
+        device.device_status = status as Device["device_status"];
         if (lastSeen) {
           device.last_seen = lastSeen;
         }

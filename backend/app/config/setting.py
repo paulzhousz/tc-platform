@@ -192,39 +192,29 @@ class Settings(BaseSettings):
     # ================================================= #
     # ******************* Modbus 控制模块配置 ********** #
     # ================================================= #
-    # LLM Agent 配置
+    # LLM Agent 配置（敏感信息保留在 settings）
     MODBUS_LLM_BASE_URL: str = "https://api-inference.modelscope.cn/v1/"
     MODBUS_LLM_API_KEY: str = ""
-    MODBUS_LLM_MODEL_NAME: str = "Qwen/Qwen3-8B"
-    MODBUS_LLM_TEMPERATURE: float = 0
-    MODBUS_LLM_SESSION_TTL_MINUTES: int = 10
-    MODBUS_LLM_MAX_HISTORY_TURNS: int = 20
 
-    # Modbus 连接池配置
+    # Modbus 连接池配置（运维参数）
     MODBUS_POOL_SIZE: int = 5
     MODBUS_CONNECT_TIMEOUT: int = 5
     MODBUS_READ_TIMEOUT: int = 3
     MODBUS_IDLE_TIMEOUT: int = 300
 
-    # 重试配置
-    MODBUS_RETRY_ENABLED: bool = True
-    MODBUS_RETRY_TIMES: int = 3
-    MODBUS_RETRY_INTERVAL: float = 1.0
-
-    # 状态轮询配置
-    MODBUS_POLL_ENABLED: bool = True
-    MODBUS_POLL_INTERVAL: int = 5
-
-    # 日志保留配置
+    # 日志保留配置（运维/合规参数）
     MODBUS_LOG_RETENTION_DAYS: int = 90
-    MODBUS_PENDING_EXPIRE_MINUTES: int = 10
 
-    # FunASR 语音服务配置（现有基础设施，直接连接使用）
+    # FunASR 语音服务配置（服务端点和固定技术参数）
     MODBUS_FUNASR_WS_URL: str = "ws://localhost:10095"
-    MODBUS_FUNASR_MODE: str = "2pass-offline"
     MODBUS_FUNASR_AUDIO_FS: int = 16000
-    MODBUS_SILENCE_THRESHOLD: float = 0.01
-    MODBUS_SILENCE_DURATION: float = 5
+
+    # 注：以下配置已迁移至 sys_param 表，可通过 API 获取：
+    # - LLM: model_name, temperature, session_ttl_minutes, max_history_turns
+    # - 重试: retry_enabled, retry_times, retry_interval
+    # - 轮询: poll_enabled, poll_interval
+    # - 待确认: pending_expire_minutes
+    # - FunASR: mode, silence_threshold, silence_duration
 
     # ================================================= #
     # ******************* 重构配置 ******************* #

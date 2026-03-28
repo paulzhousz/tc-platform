@@ -10,11 +10,11 @@ from queue import Empty, Queue
 from typing import Any
 
 from app.config.setting import settings
-from app.plugin.module_modbus.models import DeviceModel
 from app.plugin.module_modbus.control.services.client_factory import (
     IModbusClient,
     ModbusClientFactory,
 )
+from app.plugin.module_modbus.models import DeviceModel
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class ModbusConnectionPool:
                     pool.put(client)
                     connected_count += 1
                 else:
-                    logger.warning(f"设备 {device.name} 连接 {i+1} 初始化失败")
+                    logger.warning(f"设备 {device.name} 连接 {i + 1} 初始化失败")
             except Exception as e:
                 logger.error(f"设备 {device.name} 连接初始化异常: {e}")
 

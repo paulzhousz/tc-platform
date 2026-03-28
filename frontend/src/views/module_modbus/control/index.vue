@@ -6,7 +6,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useModbusStore, type ChatSession } from "@/store/modules/modbus.store";
 import { DeviceAPI, ControlAPI } from "@/api/module_modbus";
-import type { Device, TagPoint, ActionStep } from "@/api/module_modbus";
+import type { Device, TagPoint, ActionStep, ModbusConfig } from "@/api/module_modbus";
 import { useModbusWs } from "@/composables/modbus/use-modbus-ws";
 import { useFunASRWs } from "@/composables/modbus/use-funasr-ws";
 import { useTypewriter } from "@/composables/modbus/use-typewriter";
@@ -36,7 +36,7 @@ const treeData = computed(() => {
     children: devices.map((d) => ({
       id: d.id,
       label: d.name,
-      status: d.status,
+      device_status: d.device_status,
     })),
   }));
 });
@@ -47,6 +47,27 @@ const messageListRef = ref<HTMLElement | null>(null);
 const expandedReasonings = ref<number[]>([]);
 const expandedSteps = ref<Set<string>>(new Set());
 
+// Modbus 配置（从后端获取）
+const modbusConfig = ref<ModbusConfig>({
+  modbus_llm_model_name: "Qwen/Qwen3-8B",
+  modbus_llm_temperature: 0,
+  modbus_llm_session_ttl_minutes: 10,
+  modbus_llm_max_history_turns: 20,
+  modbus_retry_enabled: true,
+  modbus_retry_times: 3,
+  modbus_retry_interval: 1.0,
+  modbus_poll_enabled: true,
+  modbus_poll_interval: 5,
+  modbus_pending_expire_minutes: 10,
+  // 注意: modbus_funasr_mode 参数目前未使用，mode 在 useFunASRWs 中硬编码为 "2pass-offline"
+  // 如需动态配置，需给 useFunASRWs 添加 mode 参数
+  modbus_funasr_mode: "2pass-offline",
+  modbus_silence_threshold: 0.03,
+  modbus_silence_duration: 5,
+  // 聊天历史配置
+  modbus_chat_save_min_messages: 2,
+});
+
 // 语音输入相关
 const {
   isConnected: voiceConnected,
@@ -55,6 +76,7 @@ const {
   startRecording: startVoiceRecording,
   stopRecording: stopVoiceRecording,
   connect: connectVoiceService,
+  updateSilenceConfig,
 } = useFunASRWs({
   onResult: (text, isFinal) => {
     if (isFinal && text) {
@@ -64,6 +86,9 @@ const {
   onError: (error) => {
     ElMessage.error(error.message || "语音输入错误");
   },
+  // 使用配置值
+  silenceThreshold: modbusConfig.value.modbus_silence_threshold,
+  silenceDuration: modbusConfig.value.modbus_silence_duration,
 });
 
 // 快捷指令
@@ -144,12 +169,7 @@ async function handleConnect() {
       return;
     }
 
-    const msg = data.message || "连接成功";
-    if (failedCount > 0) {
-      ElMessage.warning(msg);
-    } else {
-      ElMessage.success(msg);
-    }
+    // 消息由全局拦截器显示
 
     connected.value = true;
     connectWs();
@@ -167,21 +187,23 @@ async function handleDisconnect() {
 
   disconnecting.value = true;
   try {
-    if (modbusStore.messages.length > 0) {
-      modbusStore.clearMessages();
-      ElMessage.info("对话已保存");
+    // 保存当前对话（如果消息数达到阈值）
+    const minMessages = modbusConfig.value.modbus_chat_save_min_messages;
+    if (modbusStore.messages.length >= minMessages) {
+      const onlineDevs = modbusStore.onlineDevices;
+      await modbusStore.saveChatHistory(
+        onlineDevs.length,
+        onlineDevs.map((d) => d.name)
+      );
     }
-    const result = await ControlAPI.disconnect();
-    const msg = result.data.data?.message || "断开成功";
-    ElMessage.success(msg);
+
+    await ControlAPI.disconnect();
     connected.value = false;
     disconnectWs();
+    modbusStore.clearMessages();
     await modbusStore.loadDevices();
-  } catch (error: unknown) {
-    const errorMsg =
-      (error as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message || "断开失败";
-    ElMessage.error(errorMsg);
+  } catch {
+    // 错误已由全局拦截器处理
   } finally {
     disconnecting.value = false;
   }
@@ -189,7 +211,7 @@ async function handleDisconnect() {
 
 // 单个设备连接
 async function handleConnectDevice(device: Device) {
-  if (deviceConnecting.value || device.status === "online") return;
+  if (deviceConnecting.value || device.device_status === "online") return;
 
   deviceConnecting.value = true;
   try {
@@ -201,19 +223,21 @@ async function handleConnectDevice(device: Device) {
     const deviceResult = results.find(
       (r: { device_id: number }) => r.device_id === device.id
     );
+
     if (deviceResult?.success) {
-      ElMessage.success(`${device.name} 连接成功`);
-      device.status = "online";
+      // 立即更新 store 中的设备状态，确保 UI 即时响应
+      // WebSocket 推送会作为后续同步的保障
+      modbusStore.updateDeviceStatus(device.id, "online", new Date().toISOString());
+
       if (!connected.value) {
         connected.value = true;
         connectWs();
       }
-      await modbusStore.loadDevices();
+
+      // 刷新点位数据
       if (selectedDevice.value?.id === device.id) {
         const tagResult = await DeviceAPI.getTags(device.id);
         deviceTags.value = tagResult.data.data?.items || [];
-        selectedDevice.value =
-          modbusStore.devices.find((d) => d.id === device.id) || device;
       }
     }
   } catch {
@@ -225,25 +249,21 @@ async function handleConnectDevice(device: Device) {
 
 // 单个设备断开
 async function handleDisconnectDevice(device: Device) {
-  if (deviceDisconnecting.value || device.status !== "online") return;
+  if (deviceDisconnecting.value || device.device_status !== "online") return;
 
   deviceDisconnecting.value = true;
   try {
     const result = await ControlAPI.disconnect([device.id]);
     if (result.data.data) {
-      ElMessage.success(`${device.name} 断开成功`);
-      device.status = "offline";
+      // 立即更新 store 中的设备状态
+      modbusStore.updateDeviceStatus(device.id, "offline", undefined);
+
       const hasOtherOnline = modbusStore.devices.some(
-        (d) => d.id !== device.id && d.status === "online"
+        (d) => d.id !== device.id && d.device_status === "online"
       );
       if (!hasOtherOnline) {
         connected.value = false;
         disconnectWs();
-      }
-      await modbusStore.loadDevices();
-      if (selectedDevice.value?.id === device.id) {
-        selectedDevice.value =
-          modbusStore.devices.find((d) => d.id === device.id) || device;
       }
     }
   } catch {
@@ -265,12 +285,12 @@ async function checkConnectionStatus() {
       connected.value = true;
     } else {
       modbusStore.devices.forEach((d) => {
-        d.status = "offline";
+        d.device_status = "offline";
       });
     }
   } catch {
     modbusStore.devices.forEach((d) => {
-      d.status = "offline";
+      d.device_status = "offline";
     });
   }
 }
@@ -299,7 +319,7 @@ async function showDeviceStatus(deviceId: number) {
 async function handleGroupExpand(activeKey: string | string[]) {
   const key = Array.isArray(activeKey) ? activeKey[0] : activeKey;
 
-  if (key && selectedDevice.value && selectedDevice.value.status === "online") {
+  if (key && selectedDevice.value && selectedDevice.value.device_status === "online") {
     tagLoading.value = true;
     try {
       const result = await DeviceAPI.getTags(selectedDevice.value.id);
@@ -315,8 +335,8 @@ async function handleGroupExpand(activeKey: string | string[]) {
 }
 
 // 设备树选择
-function onDeviceSelect(data: { id: number; label: string; status?: string }) {
-  if (data.status) {
+function onDeviceSelect(data: { id: number; label: string; device_status?: string }) {
+  if (data.device_status) {
     selectedKeys.value = [data.id];
     const device = modbusStore.devices.find((d) => d.id === data.id);
     if (device) {
@@ -549,10 +569,23 @@ function stopGeneration() {
 }
 
 // 新建对话
-function newChat() {
-  if (modbusStore.messages.length > 0) {
-    // 可选：保存当前对话
+async function newChat() {
+  const minMessages = modbusConfig.value.modbus_chat_save_min_messages;
+
+  // 检查是否需要保存当前对话
+  if (modbusStore.messages.length >= minMessages) {
+    // 获取在线设备信息
+    const onlineDevs = modbusStore.onlineDevices;
+    const deviceCount = onlineDevs.length;
+    const deviceNames = onlineDevs.map((d) => d.name);
+
+    // 保存当前对话
+    const result = await modbusStore.saveChatHistory(deviceCount, deviceNames);
+    if (result.success) {
+      ElMessage.success("对话已保存");
+    }
   }
+
   modbusStore.clearMessages();
   ElMessage.success("已创建新对话");
 }
@@ -660,6 +693,23 @@ async function loadQuickCommands() {
   }
 }
 
+// 加载 Modbus 配置
+async function loadModbusConfig() {
+  try {
+    const result = await ControlAPI.getConfig();
+    if (result.data.data) {
+      modbusConfig.value = result.data.data;
+      // 更新语音识别的静音检测配置
+      updateSilenceConfig(
+        modbusConfig.value.modbus_silence_threshold,
+        modbusConfig.value.modbus_silence_duration
+      );
+    }
+  } catch (error) {
+    console.error("Failed to load modbus config:", error);
+  }
+}
+
 // 初始化
 onMounted(async () => {
   try {
@@ -667,6 +717,7 @@ onMounted(async () => {
     await modbusStore.loadChatHistory();
     await checkConnectionStatus();
     await loadQuickCommands();
+    await loadModbusConfig();
   } catch (error) {
     console.error("Failed to initialize modbus control page:", error);
   }
@@ -719,13 +770,13 @@ onMounted(async () => {
           @node-click="onDeviceSelect"
         >
           <template #default="{ data }">
-            <span v-if="data.status" class="device-tree-node">
+            <span v-if="data.device_status" class="device-tree-node">
               <Icon
-                :icon="data.status === 'online' ? 'mdi:check-circle' : 'mdi:circle-outline'"
+                :icon="data.device_status === 'online' ? 'mdi:check-circle' : 'mdi:circle-outline'"
                 class="status-icon"
-                :style="{ color: getStatusColor(data.status) }"
+                :style="{ color: getStatusColor(data.device_status) }"
               />
-              <span class="device-title" :class="{ offline: data.status !== 'online' }">
+              <span class="device-title" :class="{ offline: data.device_status !== 'online' }">
                 {{ data.label }}
               </span>
               <el-button
@@ -1112,8 +1163,8 @@ onMounted(async () => {
             {{ selectedDevice.slave_id }}
           </el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(selectedDevice.status)">
-              {{ getStatusText(selectedDevice.status) }}
+            <el-tag :type="getStatusType(selectedDevice.device_status)">
+              {{ getStatusText(selectedDevice.device_status) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="最后在线">
@@ -1124,7 +1175,7 @@ onMounted(async () => {
         <!-- 设备操作按钮 -->
         <div class="device-action-section">
           <el-button
-            v-if="selectedDevice.status === 'online'"
+            v-if="selectedDevice.device_status === 'online'"
             type="danger"
             :loading="deviceDisconnecting"
             @click="handleDisconnectDevice(selectedDevice)"

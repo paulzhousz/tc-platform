@@ -8,7 +8,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ==================== 枚举类型 ====================
 
 
@@ -83,8 +82,8 @@ class DeviceBase(BaseModel):
     host: str = Field(..., max_length=100, description="IP 地址")
     port: int = Field(default=502, ge=1, le=65535, description="端口")
     slave_id: int = Field(default=1, ge=1, description="从站地址")
-    baud_rate: int = Field(default=9600, description="波特率")
-    parity: str = Field(default="N", max_length=10, description="校验位")
+    baud_rate: int | None = Field(None, description="波特率")
+    parity: str | None = Field(None, max_length=10, description="校验位")
 
 
 class DeviceCreate(DeviceBase):
@@ -105,7 +104,7 @@ class DeviceUpdate(BaseModel):
 
 class DeviceResponse(DeviceBase):
     id: int
-    status: DeviceStatus
+    device_status: DeviceStatus
     last_seen: datetime | None
     created_time: datetime
     updated_time: datetime | None
@@ -198,7 +197,7 @@ class CommandLogResponse(BaseModel):
     action: str
     request_value: float | None
     actual_value: float | None
-    status: CommandStatus
+    log_status: CommandStatus
     error_message: str | None
     confirmation_required: bool
     confirmed_by: int | None
@@ -238,7 +237,7 @@ class PendingConfirmResponse(BaseModel):
     tag_name: str | None
     target_value: float | None
     unit: str | None
-    status: ConfirmStatus
+    confirm_status: ConfirmStatus
     expires_at: datetime | None
     reviewed_by: int | None
     reviewed_at: datetime | None

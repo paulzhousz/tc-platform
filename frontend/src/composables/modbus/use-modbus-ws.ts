@@ -1,6 +1,9 @@
 import { onUnmounted, ref } from "vue";
 import { useModbusStore } from "@/store/modules/modbus.store";
-import { useUserStore } from "@/store/modules/user.store";
+import { Auth } from "@/utils/auth";
+
+// WebSocket 端点（从环境变量获取，直接连接后端）
+const WS_URL = import.meta.env.VITE_APP_WS_ENDPOINT;
 
 export interface WebSocketMessage {
   type: "device_status" | "tag_value" | "operation_result" | "pong";
@@ -10,35 +13,42 @@ export interface WebSocketMessage {
 
 export function useModbusWs() {
   const modbusStore = useModbusStore();
-  const userStore = useUserStore();
 
   const ws = ref<WebSocket | null>(null);
   const reconnectAttempts = ref(0);
   const maxReconnectAttempts = 5;
   const reconnectInterval = 3000;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let manuallyDisconnected = false; // 标志：是否手动断开
 
   function connect() {
     if (ws.value?.readyState === WebSocket.OPEN) {
       return;
     }
 
+    // 检查 WebSocket 端点配置
+    if (!WS_URL) {
+      console.error("[Modbus WS] WebSocket endpoint not configured");
+      return;
+    }
+
+    manuallyDisconnected = false; // 重置手动断开标志
     modbusStore.setWsConnecting(true);
 
-    // 获取 token
-    const token = userStore.getBasicInfo?.token || localStorage.getItem("token");
+    // 使用 Auth 工具类获取 token（支持"记住我"功能）
+    const token = Auth.getAccessToken();
     if (!token) {
       console.error("[Modbus WS] No token available");
       return;
     }
 
-    // 构建 WebSocket URL - 使用当前页面 host，通过 Vite proxy 转发
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/modbus?token=${token}`;
+    // 构建 WebSocket URL - 直接连接后端，与 AI 模块方式一致
+    // URL: ws://127.0.0.1:9000/api/v1/ws/modbus?token=xxx
+    const url = new URL("/api/v1/ws/modbus", WS_URL);
+    url.searchParams.append("token", token);
 
     try {
-      ws.value = new WebSocket(wsUrl);
+      ws.value = new WebSocket(url.toString());
 
       ws.value.onopen = () => {
         console.log("[Modbus WS] Connected");
@@ -63,7 +73,10 @@ export function useModbusWs() {
       ws.value.onclose = () => {
         console.log("[Modbus WS] Disconnected");
         modbusStore.setWsConnected(false);
-        scheduleReconnect();
+        // 只有非手动断开时才尝试重连
+        if (!manuallyDisconnected) {
+          scheduleReconnect();
+        }
       };
     } catch (error) {
       console.error("[Modbus WS] Connect error:", error);
@@ -73,6 +86,8 @@ export function useModbusWs() {
   }
 
   function disconnect() {
+    manuallyDisconnected = true; // 标记为手动断开
+    reconnectAttempts.value = 0; // 重置重连计数
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;

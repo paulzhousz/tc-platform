@@ -14,7 +14,7 @@ export interface CommandLog {
   action: "READ" | "WRITE";
   request_value?: number;
   actual_value?: number;
-  status: "pending" | "success" | "failed" | "cancelled";
+  log_status: "pending" | "success" | "failed" | "cancelled";
   error_message?: string;
   confirmation_required: boolean;
   confirmed_by?: number;
@@ -59,7 +59,7 @@ export interface LogListParams {
   status?: string;
   start_time?: string;
   end_time?: string;
-  page?: number;
+  page_no?: number;
   page_size?: number;
 }
 

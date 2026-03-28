@@ -9,10 +9,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+from redis.asyncio.client import Redis
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.setting import settings
+from app.plugin.module_modbus.control.services.config_service import ModbusConfigService
 from app.plugin.module_modbus.models import (
     AgentSessionModel,
     CommandLogModel,
@@ -31,10 +33,10 @@ class LogCleanupService:
     - 清理过期会话记录
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis):
         self.db = db
+        self._redis = redis
         self._retention_days = settings.MODBUS_LOG_RETENTION_DAYS
-        self._pending_expire_minutes = settings.MODBUS_PENDING_EXPIRE_MINUTES
 
     async def cleanup_command_logs(self) -> int:
         """清理过期的操作日志
@@ -70,14 +72,14 @@ class LogCleanupService:
 
         # 查询过期的 pending 记录
         stmt = select(PendingConfirmModel).where(
-            PendingConfirmModel.status == "pending",
+            PendingConfirmModel.confirm_status == "pending",
             PendingConfirmModel.expires_at < now,
         )
         expired = (await self.db.execute(stmt)).scalars().all()
 
         count = 0
         for pending in expired:
-            pending.status = "expired"
+            pending.confirm_status = "expired"
             count += 1
 
             # 发送过期通知
@@ -113,9 +115,8 @@ class LogCleanupService:
         Returns:
             清理的记录数
         """
-        cutoff = datetime.now() - timedelta(
-            minutes=settings.MODBUS_LLM_SESSION_TTL_MINUTES
-        )
+        ttl_minutes = await ModbusConfigService.get(self._redis, "modbus_llm_session_ttl_minutes")
+        cutoff = datetime.now() - timedelta(minutes=ttl_minutes)
 
         stmt = delete(AgentSessionModel).where(
             AgentSessionModel.last_active < cutoff
@@ -144,14 +145,15 @@ class LogCleanupService:
         return result
 
 
-async def cleanup_expired_data(db: AsyncSession) -> dict[str, Any]:
+async def cleanup_expired_data(db: AsyncSession, redis: Redis) -> dict[str, Any]:
     """清理过期数据的便捷函数
 
     Args:
         db: 数据库会话
+        redis: Redis 客户端实例
 
     Returns:
         清理统计
     """
-    service = LogCleanupService(db)
+    service = LogCleanupService(db, redis)
     return await service.cleanup_all()

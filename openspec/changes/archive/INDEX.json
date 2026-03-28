@@ -1,0 +1,17 @@
+{
+  "changes": [
+    {
+      "id": "2026-03-28-add-modbus-module",
+      "archivedAt": "2026-03-28T12:00:00Z",
+      "status": "completed",
+      "testsPassing": true,
+      "testsCount": 161,
+      "codeReviewed": true,
+      "deltaSpecs": {
+        "added": ["modbus/requirements"],
+        "modified": [],
+        "removed": []
+      }
+    }
+  ]
+}

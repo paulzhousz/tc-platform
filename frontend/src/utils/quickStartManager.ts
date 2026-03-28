@@ -1,7 +1,7 @@
 import { ElMessage } from "element-plus";
 
-/** 收藏数量上限（工作台固定两列展示，不再使用内部滚动区） */
-export const QUICK_LINK_MAX = 10;
+/** 收藏数量上限（工作台「我的收藏」为 3 列 × 最多 5 排，共 15 个） */
+export const QUICK_LINK_MAX = 15;
 
 // 快速链接数据类型
 export interface QuickLink {

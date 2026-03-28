@@ -192,252 +192,266 @@
       </ElRow>
     </div>
 
-    <!-- 运行快照 + 运行中的任务（一行两列）；系统日志 + 最新消息（下一行两列） -->
-    <ElRow :gutter="16" class="mt-4 workplace-ops-row workplace-ops-row--pair">
-      <ElCol :xs="24" :md="12" class="workplace-ops-col">
-        <ElCard
-          v-loading="statsLoading"
-          shadow="hover"
-          class="workplace-snapshot-card workplace-surface workplace-ops-card"
-        >
-          <template #header>
-            <div class="workplace-snapshot-card__head">
-              <div>
-                <span class="workplace-panel-title">运行快照</span>
-                <p class="workplace-section-sub workplace-section-sub--inline">
-                  关键指标一览；可进菜单看全量
-                </p>
-              </div>
-            </div>
-          </template>
-          <div class="workplace-snapshot-grid">
-            <div class="workplace-stat-tile">
-              <div class="workplace-stat-tile__label">系统用户</div>
-              <div class="workplace-stat-tile__value">
-                {{ fmtMetric(overviewSnapshot.userTotal) }}
-              </div>
-              <div class="workplace-stat-tile__hint">账号总数</div>
-            </div>
-            <div class="workplace-stat-tile">
-              <div class="workplace-stat-tile__label">当前在线</div>
-              <div class="workplace-stat-tile__value">
-                {{ fmtMetric(overviewSnapshot.onlineTotal) }}
-              </div>
-              <div class="workplace-stat-tile__hint">会话在线</div>
-            </div>
-            <div class="workplace-stat-tile">
-              <div class="workplace-stat-tile__label">本机负载</div>
-              <div class="workplace-stat-tile__value workplace-stat-tile__value--sm">
-                CPU {{ fmtPercent(overviewSnapshot.cpuUsed) }} · 内存
-                {{ fmtPercent(overviewSnapshot.memUsage) }}
-              </div>
-              <div class="workplace-stat-tile__hint">监控服务所在机器</div>
-            </div>
-            <div class="workplace-stat-tile">
-              <div class="workplace-stat-tile__label">调度任务</div>
-              <div class="workplace-stat-tile__value">
-                {{ fmtMetric(overviewSnapshot.jobCount) }}
-              </div>
-              <div class="workplace-stat-tile__hint">
-                {{ overviewSnapshot.schedulerStatus || "—" }}
-                <template v-if="overviewSnapshot.schedulerRunning">· 引擎运行中</template>
-              </div>
-            </div>
-            <div class="workplace-stat-tile">
-              <div class="workplace-stat-tile__label">AI 与应用</div>
-              <div class="workplace-stat-tile__value workplace-stat-tile__value--sm">
-                会话 {{ fmtMetric(overviewSnapshot.chatSessions) }} · 应用
-                {{ fmtMetric(overviewSnapshot.appCount) }}
-              </div>
-              <div class="workplace-stat-tile__hint">对话列表与应用数量</div>
-            </div>
-          </div>
-          <div v-if="statsUpdatedAt" class="workplace-snapshot-card__foot">
-            <span class="workplace-snapshot-card__foot-dot" aria-hidden="true" />
-            更新于 {{ formatSnapshotTime(statsUpdatedAt) }}
-          </div>
-        </ElCard>
-      </ElCol>
-
-      <ElCol :xs="24" :md="12" class="workplace-ops-col">
-        <ElCard shadow="hover" class="workplace-section-card workplace-surface workplace-ops-card">
-          <template #header>
-            <div class="workplace-section-card__head">
-              <div>
-                <span class="workplace-panel-title">运行中的任务</span>
-                <p class="workplace-section-sub workplace-section-sub--inline">
-                  调度器 · 最多 10 条
-                </p>
-              </div>
-              <ElButton type="primary" link @click="goToJob()">任务管理</ElButton>
-            </div>
-          </template>
-          <div v-loading="jobsLoading" class="workplace-ops-card__body">
-            <el-empty
-              v-if="!jobsLoading && runningJobs.length === 0"
-              :image-size="64"
-              description="暂无运行中的任务"
-            />
-            <ul v-else class="workplace-running-list workplace-running-list--in-grid">
-              <li v-for="job in runningJobs" :key="job.id" class="workplace-running-list__item">
-                <div class="workplace-running-list__main">
-                  <span class="workplace-running-list__name">{{ job.name }}</span>
-                  <el-tag type="success" size="small">运行中</el-tag>
-                </div>
-                <div class="workplace-running-list__meta">
-                  <span v-if="job.next_run_time">下次：{{ job.next_run_time }}</span>
-                  <span v-if="job.trigger" class="workplace-running-list__trigger">
-                    {{ job.trigger }}
-                  </span>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </ElCard>
-      </ElCol>
-    </ElRow>
-
-    <ElRow :gutter="16" class="mt-4 workplace-ops-row workplace-ops-row--pair">
-      <ElCol :xs="24" :md="12" class="workplace-ops-col">
-        <ElCard shadow="hover" class="workplace-section-card workplace-surface workplace-ops-card">
-          <template #header>
-            <div class="workplace-section-card__head">
-              <div>
-                <span class="workplace-panel-title">系统日志</span>
-                <p class="workplace-section-sub workplace-section-sub--inline">
-                  已加载 {{ systemLogs.length }} 条 · 默认 10 条
-                </p>
-              </div>
-              <div class="workplace-section-card__actions">
-                <ElButton
-                  v-if="systemLogs.length > 10"
-                  type="primary"
-                  link
-                  @click="logsExpanded = !logsExpanded"
-                >
-                  {{ logsExpanded ? "收起" : "展开全部" }}
-                </ElButton>
-                <ElButton type="primary" link @click="goToLog()">日志管理</ElButton>
-              </div>
-            </div>
-          </template>
-          <div
-            v-loading="logsLoading"
-            class="workplace-ops-card__body workplace-ops-card__body--logs"
+    <!-- 运行快照/任务 与 日志/消息：独立纵向堆叠，避免 el-row 负边距与 flex 链导致块级重叠 -->
+    <div class="mt-4 workplace-ops-stack">
+      <ElRow :gutter="16" class="workplace-ops-row workplace-ops-row--pair">
+        <ElCol :xs="24" :md="12" class="workplace-ops-col">
+          <ElCard
+            v-loading="statsLoading"
+            shadow="hover"
+            class="workplace-snapshot-card workplace-surface workplace-ops-card"
           >
-            <el-empty
-              v-if="!logsLoading && systemLogs.length === 0"
-              :image-size="72"
-              description="暂无日志"
-            />
-            <div v-else class="workplace-logs-scroll">
-              <el-table
-                :data="displayedLogs"
-                class="workplace-logs-table"
-                size="small"
-                stripe
-                :max-height="logsExpanded ? 360 : 220"
-              >
-                <el-table-column label="类型" width="72" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="row.type === 1 ? 'success' : 'primary'" size="small">
-                      {{ row.type === 1 ? "登录" : "操作" }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  label="路径"
-                  prop="request_path"
-                  min-width="120"
-                  show-overflow-tooltip
-                />
-                <el-table-column label="方法" width="72" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getMethodType(row.request_method)" size="small">
-                      {{ row.request_method || "—" }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="状态" width="64" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusCodeType(row.response_code)" size="small">
-                      {{ row.response_code ?? "—" }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  label="IP"
-                  prop="request_ip"
-                  min-width="100"
-                  show-overflow-tooltip
-                />
-                <el-table-column
-                  label="时间"
-                  prop="created_time"
-                  min-width="136"
-                  show-overflow-tooltip
-                />
-              </el-table>
-            </div>
-          </div>
-        </ElCard>
-      </ElCol>
-
-      <ElCol :xs="24" :md="12" class="workplace-ops-col">
-        <ElCard shadow="hover" class="workplace-section-card workplace-surface workplace-ops-card">
-          <template #header>
-            <div class="workplace-section-card__head">
-              <div>
-                <span class="workplace-panel-title">最新消息</span>
-                <p class="workplace-section-sub workplace-section-sub--inline">
-                  公告与通知 · 最近 5 条
-                </p>
-              </div>
-              <ElButton type="primary" link @click="goToNotice()">公告管理</ElButton>
-            </div>
-          </template>
-          <div class="workplace-ops-card__body workplace-ops-card__body--notices">
-            <el-empty v-if="noticeList.length === 0" :image-size="80" description="暂无数据" />
-            <ElTimeline v-else class="workplace-notice-timeline">
-              <ElTimelineItem
-                v-for="(item, index) in noticePreviewList"
-                :key="item.id"
-                :type="index === 0 ? 'primary' : 'info'"
-              >
-                <div class="workplace-notice-card">
-                  <div class="workplace-notice-card__head">
-                    <div class="workplace-notice-card__titles">
-                      <span class="workplace-notice-card__title">
-                        {{ item.notice_title }}
-                      </span>
-                      <el-tag size="small" :type="getNoticeTypeColor(item.notice_type)">
-                        {{ getNoticeTypeText(item.notice_type) }}
-                      </el-tag>
-                    </div>
-                    <span class="workplace-notice-card__time">
-                      {{ formatTime(item.created_time) }}
-                    </span>
-                  </div>
-                  <div class="workplace-notice-card__content">
-                    {{ item.notice_content }}
-                  </div>
-                  <div class="workplace-notice-card__foot">
-                    <span class="workplace-notice-card__author">
-                      {{ item.created_by?.name }} 发布
-                    </span>
-                    <el-tooltip placement="top" :content="item.description || item.notice_content">
-                      <ElButton target="_blank" type="primary" link @click="goToNotice()">
-                        详情↗
-                      </ElButton>
-                    </el-tooltip>
-                  </div>
+            <template #header>
+              <div class="workplace-snapshot-card__head">
+                <div>
+                  <span class="workplace-panel-title">运行快照</span>
+                  <p class="workplace-section-sub workplace-section-sub--inline">
+                    关键指标一览；可进菜单看全量
+                  </p>
                 </div>
-              </ElTimelineItem>
-            </ElTimeline>
-          </div>
-        </ElCard>
-      </ElCol>
-    </ElRow>
+              </div>
+            </template>
+            <div class="workplace-snapshot-grid">
+              <div class="workplace-stat-tile">
+                <div class="workplace-stat-tile__label">系统用户</div>
+                <div class="workplace-stat-tile__value">
+                  {{ fmtMetric(overviewSnapshot.userTotal) }}
+                </div>
+                <div class="workplace-stat-tile__hint">账号总数</div>
+              </div>
+              <div class="workplace-stat-tile">
+                <div class="workplace-stat-tile__label">当前在线</div>
+                <div class="workplace-stat-tile__value">
+                  {{ fmtMetric(overviewSnapshot.onlineTotal) }}
+                </div>
+                <div class="workplace-stat-tile__hint">会话在线</div>
+              </div>
+              <div class="workplace-stat-tile">
+                <div class="workplace-stat-tile__label">本机负载</div>
+                <div class="workplace-stat-tile__value workplace-stat-tile__value--sm">
+                  CPU {{ fmtPercent(overviewSnapshot.cpuUsed) }} · 内存
+                  {{ fmtPercent(overviewSnapshot.memUsage) }}
+                </div>
+                <div class="workplace-stat-tile__hint">监控服务所在机器</div>
+              </div>
+              <div class="workplace-stat-tile">
+                <div class="workplace-stat-tile__label">调度任务</div>
+                <div class="workplace-stat-tile__value">
+                  {{ fmtMetric(overviewSnapshot.jobCount) }}
+                </div>
+                <div class="workplace-stat-tile__hint">
+                  {{ overviewSnapshot.schedulerStatus || "—" }}
+                  <template v-if="overviewSnapshot.schedulerRunning">· 引擎运行中</template>
+                </div>
+              </div>
+              <div class="workplace-stat-tile">
+                <div class="workplace-stat-tile__label">AI 与应用</div>
+                <div class="workplace-stat-tile__value workplace-stat-tile__value--sm">
+                  会话 {{ fmtMetric(overviewSnapshot.chatSessions) }} · 应用
+                  {{ fmtMetric(overviewSnapshot.appCount) }}
+                </div>
+                <div class="workplace-stat-tile__hint">对话列表与应用数量</div>
+              </div>
+            </div>
+            <div v-if="statsUpdatedAt" class="workplace-snapshot-card__foot">
+              <span class="workplace-snapshot-card__foot-dot" aria-hidden="true" />
+              更新于 {{ formatSnapshotTime(statsUpdatedAt) }}
+            </div>
+          </ElCard>
+        </ElCol>
+
+        <ElCol :xs="24" :md="12" class="workplace-ops-col">
+          <ElCard
+            shadow="hover"
+            class="workplace-section-card workplace-surface workplace-ops-card"
+          >
+            <template #header>
+              <div class="workplace-section-card__head">
+                <div>
+                  <span class="workplace-panel-title">运行中的任务</span>
+                  <p class="workplace-section-sub workplace-section-sub--inline">
+                    调度器 · 最多 10 条
+                  </p>
+                </div>
+                <ElButton type="primary" link @click="goToJob()">任务管理</ElButton>
+              </div>
+            </template>
+            <div v-loading="jobsLoading" class="workplace-ops-card__body">
+              <el-empty
+                v-if="!jobsLoading && runningJobs.length === 0"
+                :image-size="64"
+                description="暂无运行中的任务"
+              />
+              <ul v-else class="workplace-running-list workplace-running-list--in-grid">
+                <li v-for="job in runningJobs" :key="job.id" class="workplace-running-list__item">
+                  <div class="workplace-running-list__main">
+                    <span class="workplace-running-list__name">{{ job.name }}</span>
+                    <el-tag type="success" size="small">运行中</el-tag>
+                  </div>
+                  <div class="workplace-running-list__meta">
+                    <span v-if="job.next_run_time">下次：{{ job.next_run_time }}</span>
+                    <span v-if="job.trigger" class="workplace-running-list__trigger">
+                      {{ job.trigger }}
+                    </span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </ElCard>
+        </ElCol>
+      </ElRow>
+
+      <ElRow :gutter="16" class="workplace-ops-row workplace-ops-row--pair">
+        <ElCol :xs="24" :md="12" class="workplace-ops-col">
+          <ElCard
+            shadow="hover"
+            class="workplace-section-card workplace-surface workplace-ops-card"
+          >
+            <template #header>
+              <div class="workplace-section-card__head">
+                <div>
+                  <span class="workplace-panel-title">系统日志</span>
+                  <p class="workplace-section-sub workplace-section-sub--inline">
+                    已加载 {{ systemLogs.length }} 条 · 默认 10 条
+                  </p>
+                </div>
+                <div class="workplace-section-card__actions">
+                  <ElButton
+                    v-if="systemLogs.length > 10"
+                    type="primary"
+                    link
+                    @click="logsExpanded = !logsExpanded"
+                  >
+                    {{ logsExpanded ? "收起" : "展开全部" }}
+                  </ElButton>
+                  <ElButton type="primary" link @click="goToLog()">日志管理</ElButton>
+                </div>
+              </div>
+            </template>
+            <div
+              v-loading="logsLoading"
+              class="workplace-ops-card__body workplace-ops-card__body--logs"
+            >
+              <el-empty
+                v-if="!logsLoading && systemLogs.length === 0"
+                :image-size="72"
+                description="暂无日志"
+              />
+              <div v-else class="workplace-logs-scroll">
+                <el-table
+                  :data="displayedLogs"
+                  class="workplace-logs-table"
+                  size="small"
+                  stripe
+                  :max-height="logsExpanded ? 360 : 220"
+                >
+                  <el-table-column label="类型" width="72" align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="row.type === 1 ? 'success' : 'primary'" size="small">
+                        {{ row.type === 1 ? "登录" : "操作" }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="路径"
+                    prop="request_path"
+                    min-width="120"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column label="方法" width="72" align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="getMethodType(row.request_method)" size="small">
+                        {{ row.request_method || "—" }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="状态" width="64" align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="getStatusCodeType(row.response_code)" size="small">
+                        {{ row.response_code ?? "—" }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="IP"
+                    prop="request_ip"
+                    min-width="100"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    label="时间"
+                    prop="created_time"
+                    min-width="136"
+                    show-overflow-tooltip
+                  />
+                </el-table>
+              </div>
+            </div>
+          </ElCard>
+        </ElCol>
+
+        <ElCol :xs="24" :md="12" class="workplace-ops-col">
+          <ElCard
+            shadow="hover"
+            class="workplace-section-card workplace-surface workplace-ops-card"
+          >
+            <template #header>
+              <div class="workplace-section-card__head">
+                <div>
+                  <span class="workplace-panel-title">最新消息</span>
+                  <p class="workplace-section-sub workplace-section-sub--inline">
+                    公告与通知 · 最近 5 条
+                  </p>
+                </div>
+                <ElButton type="primary" link @click="goToNotice()">公告管理</ElButton>
+              </div>
+            </template>
+            <div class="workplace-ops-card__body workplace-ops-card__body--notices">
+              <el-empty v-if="noticeList.length === 0" :image-size="80" description="暂无数据" />
+              <ElTimeline v-else class="workplace-notice-timeline">
+                <ElTimelineItem
+                  v-for="(item, index) in noticePreviewList"
+                  :key="item.id"
+                  :type="index === 0 ? 'primary' : 'info'"
+                >
+                  <div class="workplace-notice-card">
+                    <div class="workplace-notice-card__head">
+                      <div class="workplace-notice-card__titles">
+                        <span class="workplace-notice-card__title">
+                          {{ item.notice_title }}
+                        </span>
+                        <el-tag size="small" :type="getNoticeTypeColor(item.notice_type)">
+                          {{ getNoticeTypeText(item.notice_type) }}
+                        </el-tag>
+                      </div>
+                      <span class="workplace-notice-card__time">
+                        {{ formatTime(item.created_time) }}
+                      </span>
+                    </div>
+                    <div class="workplace-notice-card__content">
+                      {{ item.notice_content }}
+                    </div>
+                    <div class="workplace-notice-card__foot">
+                      <span class="workplace-notice-card__author">
+                        {{ item.created_by?.name }} 发布
+                      </span>
+                      <el-tooltip
+                        placement="top"
+                        :content="item.description || item.notice_content"
+                      >
+                        <ElButton target="_blank" type="primary" link @click="goToNotice()">
+                          详情↗
+                        </ElButton>
+                      </el-tooltip>
+                    </div>
+                  </div>
+                </ElTimelineItem>
+              </ElTimeline>
+            </div>
+          </ElCard>
+        </ElCol>
+      </ElRow>
+    </div>
   </div>
 </template>
 
@@ -880,6 +894,18 @@ async function fetchWorkplaceStats() {
 .workplace-page {
   --workplace-radius: 12px;
   --workplace-radius-sm: 10px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* 与上方模块区隔离，两行 ops 之间固定间距，避免与下方栅格视觉「叠在一起」 */
+.workplace-ops-stack {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 16px;
+  width: 100%;
 }
 
 .workplace-surface {
@@ -1043,11 +1069,32 @@ async function fetchWorkplaceStats() {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
-/* ========== 模块入口 / 收藏：各为独立卡片 ========== */
-.workplace-modules-card {
-  height: 100%;
+/* ========== 模块入口 / 收藏：各为独立卡片（同行等高） ========== */
+.workplace-module-row {
+  align-items: stretch;
+}
 
+.workplace-module-row > .el-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.workplace-modules-card,
+.workplace-bookmarks-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.workplace-modules-card {
   :deep(.el-card__body) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
     padding: 16px 18px 18px;
   }
 }
@@ -1059,12 +1106,11 @@ async function fetchWorkplaceStats() {
 }
 
 .workplace-bookmarks-card {
-  height: 100%;
-
   :deep(.el-card__body) {
     display: flex;
+    flex: 1;
     flex-direction: column;
-    min-height: 280px;
+    min-height: 0;
     padding: 12px 16px 16px;
   }
 }
@@ -1120,8 +1166,11 @@ async function fetchWorkplaceStats() {
 
 .workplace-module-grid {
   display: grid;
+  flex: 1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-height: 0;
+  align-content: start;
 }
 
 @media (width >= 1400px) {
@@ -1161,9 +1210,9 @@ async function fetchWorkplaceStats() {
 
 /* 运行快照+任务、日志+消息：每行两列并排 */
 .workplace-ops-row {
-  /* 换行时与 gutter 协调的纵向间距 */
-  row-gap: 0;
+  row-gap: 16px;
   align-items: stretch;
+  width: 100%;
 }
 
 .workplace-ops-col {
@@ -1546,11 +1595,25 @@ async function fetchWorkplaceStats() {
   gap: 8px;
 }
 
+/* 3 列 × 最多 5 排固定高度（15 格）；窄屏 2 列时 15 个占 8 排 */
 .workplace-quick-list--hub {
+  --hub-row-h: 38px;
+  --hub-gap: 8px;
+
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: var(--hub-row-h);
+  gap: var(--hub-gap);
   align-content: start;
+  /* 正好 5 排所占高度：5 行 + 4 道行间距 */
+  min-height: calc(5 * var(--hub-row-h) + 4 * var(--hub-gap));
+}
+
+@media (width <= 520px) {
+  .workplace-quick-list--hub {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: calc(8 * var(--hub-row-h) + 7 * var(--hub-gap));
+  }
 }
 
 .workplace-quick-row--compact {
@@ -1678,5 +1741,28 @@ async function fetchWorkplaceStats() {
   .workplace-quick-row__accent {
     min-height: 30px;
   }
+}
+
+/* 与 --hub-row-h 对齐，保证每排高度一致 */
+.workplace-quick-list--hub .workplace-quick-row--compact {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  gap: 4px;
+  padding: 4px 4px 4px 2px;
+}
+
+.workplace-quick-list--hub .workplace-quick-row--chip .workplace-quick-row__icon {
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+}
+
+.workplace-quick-list--hub .workplace-quick-row--chip .workplace-quick-row__accent {
+  min-height: 24px;
+}
+
+.workplace-quick-list--hub .workplace-quick-row__title {
+  font-size: 12px;
 }
 </style>

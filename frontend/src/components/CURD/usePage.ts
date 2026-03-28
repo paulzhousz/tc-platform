@@ -1,44 +1,16 @@
 import { ref, Ref } from "vue";
-import type { IObject, PageContentInstance, PageModalInstance, PageSearchInstance } from "./types";
+import type { IObject, PageContentInstance, PageModalInstance } from "./types";
+import { useCrudList } from "./useCrudList";
 
 /**
  * CURD页面组合式函数
  * @returns 包含各种引用和处理函数的对象
  */
 function usePage() {
-  const searchRef = ref<PageSearchInstance>();
-  const contentRef = ref<PageContentInstance>();
+  const { searchRef, contentRef, handleQueryClick, handleResetClick } = useCrudList();
   const addModalRef = ref<PageModalInstance>();
   const editModalRef = ref<PageModalInstance>();
   const viewModalRef = ref<PageModalInstance>();
-
-  /**
-   * 处理查询点击事件
-   * @param queryParams 查询参数
-   */
-  function handleQueryClick(queryParams: IObject) {
-    try {
-      const filterParams = contentRef.value?.getFilterParams() || {};
-      contentRef.value?.fetchPageData({ ...queryParams, ...filterParams }, true);
-    } catch (error) {
-      console.error("查询数据失败:", error);
-      ElMessage.error("查询数据失败: " + (error instanceof Error ? error.message : String(error)));
-    }
-  }
-
-  /**
-   * 处理重置点击事件
-   * @param queryParams 查询参数
-   */
-  function handleResetClick(queryParams: IObject) {
-    try {
-      const filterParams = contentRef.value?.getFilterParams() || {};
-      contentRef.value?.fetchPageData({ ...queryParams, ...filterParams }, true);
-    } catch (error) {
-      console.error("重置数据失败:", error);
-      ElMessage.error("重置数据失败: " + (error instanceof Error ? error.message : String(error)));
-    }
-  }
 
   /**
    * 处理新增点击事件
@@ -224,3 +196,4 @@ function usePage() {
 }
 
 export default usePage;
+export { useCrudList } from "./useCrudList";

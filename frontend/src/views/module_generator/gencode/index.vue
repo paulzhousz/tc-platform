@@ -1,57 +1,15 @@
 <template>
   <div class="app-container">
-    <!-- 搜索区域 -->
-    <el-card class="search-container">
-      <el-form
-        ref="queryRef"
-        :model="queryFormData"
-        :inline="true"
-        label-suffix=":"
-        @submit.prevent="handleQuery"
-      >
-        <el-form-item label="表名称" prop="table_name">
-          <el-input
-            v-model="queryFormData.table_name"
-            placeholder="请输入表名称"
-            clearable
-            style="width: 200px"
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item label="表描述" prop="table_comment">
-          <el-input
-            v-model="queryFormData.table_comment"
-            placeholder="请输入表描述"
-            clearable
-            style="width: 200px"
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item class="search-buttons">
-          <el-button
-            v-hasPerm="['module_generator:gencode:query']"
-            type="primary"
-            icon="search"
-            native-type="submit"
-          >
-            查询
-          </el-button>
-          <el-button
-            v-hasPerm="['module_generator:gencode:query']"
-            icon="refresh"
-            @click="handleRefresh"
-          >
-            重置
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+    <PageSearch
+      ref="searchRef"
+      :search-config="searchConfig"
+      @query-click="handleQueryClick"
+      @reset-click="handleResetClick"
+    />
 
-    <!-- 内容区域 -->
-    <el-card class="data-table">
-      <!-- 功能区域 -->
-      <div class="data-table__toolbar">
-        <div class="data-table__toolbar--left">
+    <PageContent ref="contentRef" :content-config="contentConfig">
+      <template #toolbar="{ toolbarRight, onToolbar, removeIds, cols }">
+        <CrudToolbarLeft :remove-ids="removeIds">
           <el-row :gutter="10">
             <el-col :span="1.5">
               <el-button
@@ -78,7 +36,7 @@
                 v-hasPerm="['module_generator:gencode:delete']"
                 type="danger"
                 icon="Delete"
-                :disabled="ids.length === 0"
+                :disabled="removeIds.length === 0"
                 @click="handleDelete()"
               >
                 批量删除
@@ -89,159 +47,136 @@
                 v-hasPerm="['module_generator:gencode:code']"
                 type="warning"
                 icon="Download"
-                :disabled="!canGenerate"
+                :disabled="removeIds.length === 0"
                 @click="handleGenTable('0')"
               >
                 批量生成
               </el-button>
             </el-col>
           </el-row>
-        </div>
+        </CrudToolbarLeft>
         <div class="data-table__toolbar--right">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-tooltip content="刷新">
-                <el-button
-                  v-hasPerm="['module_generator:gencode:query']"
-                  type="primary"
-                  icon="refresh"
-                  circle
-                  @click="handleRefresh"
-                />
-              </el-tooltip>
-            </el-col>
-            <el-col :span="1.5">
-              <el-popover placement="bottom" trigger="click">
-                <template #reference>
-                  <el-button type="danger" icon="operation" circle></el-button>
-                </template>
-                <el-scrollbar max-height="350px">
-                  <template v-for="column in tableColumns" :key="column.prop">
-                    <el-checkbox v-if="column.prop" v-model="column.show" :label="column.label" />
-                  </template>
-                </el-scrollbar>
-              </el-popover>
-            </el-col>
-          </el-row>
+          <CrudToolbarRight :buttons="toolbarRight" :cols="cols" :on-toolbar="onToolbar" />
         </div>
-      </div>
-
-      <div class="data-table__content">
-        <el-table
-          ref="dataTableRef"
-          v-loading="loading"
-          :data="tableList"
-          class="data-table__content"
-          height="calc(100vh - 350px)"
-          max-height="calc(100vh - 350px)"
-          border
-          stripe
-          @selection-change="handleTableSelectionChange"
-        >
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'selection')?.show"
-            type="selection"
-            align="center"
-            width="55"
-          ></el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'index')?.show"
-            label="序号"
-            type="index"
-            min-width="30"
-            align="center"
-            fixed
-          >
-            <template #default="scope">
-              <span>
-                {{ (queryFormData.page_no - 1) * queryFormData.page_size + scope.$index + 1 }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'table_name')?.show"
-            label="表名称"
-            prop="table_name"
-            :show-overflow-tooltip="true"
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'table_comment')?.show"
-            label="表描述"
-            prop="table_comment"
-            :show-overflow-tooltip="true"
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'class_name')?.show"
-            label="实体"
-            prop="class_name"
-            :show-overflow-tooltip="true"
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'created_time')?.show"
-            label="创建时间"
-            prop="created_time"
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'updated_time')?.show"
-            label="更新时间"
-            prop="updated_time"
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'operation')?.show"
-            label="操作"
-            align="center"
-            min-width="120"
-            class-name="small-padding fixed-width"
-          >
-            <template #default="scope">
-              <el-button
-                v-hasPerm="['module_generator:gencode:update']"
-                link
-                type="primary"
-                :icon="MagicStick"
-                @click="handlePreviewTable(scope.row)"
-              >
-                代码生成
-              </el-button>
-              <el-button
-                v-hasPerm="['module_generator:gencode:delete']"
-                link
-                type="danger"
-                icon="Delete"
-                @click="handleDelete(scope.row)"
-              >
-                删除
-              </el-button>
-              <el-button
-                v-hasPerm="['module_generator:db:sync']"
-                link
-                type="success"
-                icon="Refresh"
-                @click="handleSynchDb(scope.row)"
-              >
-                同步
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <!-- 分页区域 -->
-      <template #footer>
-        <pagination
-          v-model:total="total"
-          v-model:page="queryFormData.page_no"
-          v-model:limit="queryFormData.page_size"
-          @pagination="loadingData"
-        />
       </template>
-    </el-card>
+
+      <template #table="{ data, loading: tableLoading, tableRef, onSelectionChange, pagination }">
+        <div class="data-table__content">
+          <el-table
+            :ref="tableRef as any"
+            v-loading="tableLoading"
+            row-key="id"
+            :data="data"
+            height="100%"
+            border
+            stripe
+            @selection-change="
+              (s) => {
+                handleTableSelectionChange(s as GenTableSchema[]);
+                onSelectionChange(s);
+              }
+            "
+          >
+            <template #empty>
+              <el-empty :image-size="80" description="暂无数据" />
+            </template>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'selection')?.show"
+              type="selection"
+              align="center"
+              width="55"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'index')?.show"
+              label="序号"
+              type="index"
+              min-width="30"
+              align="center"
+              fixed
+            >
+              <template #default="scope">
+                <span>
+                  {{ (pagination.currentPage - 1) * pagination.pageSize + scope.$index + 1 }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'table_name')?.show"
+              label="表名称"
+              prop="table_name"
+              :show-overflow-tooltip="true"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'table_comment')?.show"
+              label="表描述"
+              prop="table_comment"
+              :show-overflow-tooltip="true"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'class_name')?.show"
+              label="实体"
+              prop="class_name"
+              :show-overflow-tooltip="true"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'created_time')?.show"
+              label="创建时间"
+              prop="created_time"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'updated_time')?.show"
+              label="更新时间"
+              prop="updated_time"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'operation')?.show"
+              label="操作"
+              align="center"
+              min-width="120"
+              class-name="small-padding fixed-width"
+            >
+              <template #default="scope">
+                <el-button
+                  v-hasPerm="['module_generator:gencode:update']"
+                  link
+                  type="primary"
+                  :icon="MagicStick"
+                  @click="handlePreviewTable(scope.row)"
+                >
+                  代码生成
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_generator:gencode:delete']"
+                  link
+                  type="danger"
+                  icon="Delete"
+                  @click="handleDelete(scope.row)"
+                >
+                  删除
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_generator:db:sync']"
+                  link
+                  type="success"
+                  icon="Refresh"
+                  @click="handleSynchDb(scope.row)"
+                >
+                  同步
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
+    </PageContent>
 
     <!-- 创建表 -->
-    <el-dialog v-model="createTableVisible" title="创建表" append-to-body>
+    <EnhancedDialog
+      v-model="createTableVisible"
+      title="创建表"
+      width="min(920px, 96vw)"
+      append-to-body
+    >
       <span>创建表语句(支持多个建表sql语句)：</span>
       <el-button type="warning" size="small" class="ml-1 mb-1" @click="loadExampleMysql">
         加载MySQL示例
@@ -276,11 +211,11 @@
           <el-button @click="handleCreateTableCancel()">取 消</el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
 
     <!-- 导入表 -->
-    <el-dialog v-model="importVisible" title="导入表" append-to-body>
-      <el-form ref="queryRef" :model="importQueryFormData" :inline="true">
+    <EnhancedDialog v-model="importVisible" title="导入表" width="min(960px, 96vw)" append-to-body>
+      <el-form ref="importQueryRef" :model="importQueryFormData" :inline="true">
         <el-form-item label="表名称" prop="table_name">
           <el-input
             v-model="importQueryFormData.table_name"
@@ -373,13 +308,14 @@
           <el-button @click="importVisible = false">取 消</el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
 
     <!-- 代码生成抽屉 -->
-    <el-drawer
+    <EnhancedDrawer
       v-model="editVisible"
       :title="'【代码生成】' + info.table_name"
       size="85%"
+      append-to-body
       @close="handleClose"
     >
       <el-steps :active="activeStep" finish-status="success" simple>
@@ -825,7 +761,7 @@
           写入本地
         </el-button>
       </template>
-    </el-drawer>
+    </EnhancedDrawer>
   </div>
 </template>
 
@@ -838,7 +774,7 @@ defineOptions({
 import "codemirror/mode/javascript/javascript.js";
 import "codemirror/mode/sql/sql.js";
 import "codemirror/theme/dracula.css";
-import { ref, reactive, computed, onActivated, onMounted, watch } from "vue";
+import { ref, reactive, computed, onActivated, watch, nextTick, unref } from "vue";
 import { useClipboard } from "@vueuse/core";
 import { useRoute } from "vue-router";
 import Codemirror from "codemirror-editor-vue3";
@@ -866,6 +802,14 @@ import { formatTree } from "@/utils/common";
 import { MenuTypeEnum } from "@/enums";
 import { useSettingsStore } from "@/store";
 import { ThemeMode } from "@/enums/settings/theme.enum";
+import CrudToolbarLeft from "@/components/CURD/CrudToolbarLeft.vue";
+import CrudToolbarRight from "@/components/CURD/CrudToolbarRight.vue";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDialog from "@/components/CURD/EnhancedDialog.vue";
+import EnhancedDrawer from "@/components/CURD/EnhancedDrawer.vue";
+import { useCrudList } from "@/components/CURD/useCrudList";
+import type { IContentConfig, ISearchConfig } from "@/components/CURD/types";
 
 // 表格列配置接口
 interface TableColumn {
@@ -890,8 +834,10 @@ interface FileData {
   content: string;
 }
 
+const { searchRef, contentRef, handleQueryClick, handleResetClick, refreshList } = useCrudList();
+
 // 组件引用
-const queryRef = ref<FormInstance>();
+const importQueryRef = ref<FormInstance>();
 const table = ref<TableInstance>();
 const cmRef = ref<CmComponentRef>();
 const sqlRef = ref<CmComponentRef>();
@@ -900,7 +846,6 @@ const basicInfo = ref<FormInstance>();
 // 状态管理
 const loading = ref(false);
 const nextStepLoading = ref(false);
-const total = ref<number>(0);
 const uniqueId = ref("");
 const editVisible = ref(false);
 const activeStep = ref(2);
@@ -911,8 +856,6 @@ const importVisible = ref(false);
 
 // 表单和列表数据
 const createContent = ref("");
-const dateRange = ref<[Date, Date] | []>([]);
-const tableList = ref<GenTableSchema[]>([]);
 const dbTableList = ref<DBTableSchema[]>([]);
 const ids = ref<number[]>([]);
 const tableNames = ref<string[]>([]);
@@ -958,16 +901,31 @@ const previewTypes = ref<string[]>([...previewTypeOptions]);
 const code = ref<string>("");
 const treeData = ref<TreeNode[]>([]);
 
-// 分页查询参数
-const queryFormData = reactive<GenTablePageQuery>({
-  page_no: 1,
-  page_size: 10,
-  table_name: undefined,
-  table_comment: undefined,
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_generator:gencode",
+  colon: true,
+  isExpandable: false,
+  showNumber: 3,
+  form: { labelWidth: "auto" },
+  searchButtonPerm: "module_generator:gencode:query",
+  resetButtonPerm: "module_generator:gencode:query",
+  formItems: [
+    {
+      prop: "table_name",
+      label: "表名称",
+      type: "input",
+      attrs: { placeholder: "请输入表名称", clearable: true, style: { width: "200px" } },
+    },
+    {
+      prop: "table_comment",
+      label: "表描述",
+      type: "input",
+      attrs: { placeholder: "请输入表描述", clearable: true, style: { width: "200px" } },
+    },
+  ],
 });
 
-// 表格列配置
-const tableColumns = ref<TableColumn[]>([
+const contentCols = reactive<TableColumn[]>([
   { prop: "selection", label: "选择框", show: true },
   { prop: "index", label: "序号", show: true },
   { prop: "table_name", label: "表名称", show: true },
@@ -977,6 +935,26 @@ const tableColumns = ref<TableColumn[]>([
   { prop: "updated_time", label: "更新时间", show: true },
   { prop: "operation", label: "操作", show: true },
 ]);
+
+const contentConfig = reactive<IContentConfig<GenTablePageQuery>>({
+  permPrefix: "module_generator:gencode",
+  cols: contentCols as IContentConfig["cols"],
+  hideColumnFilter: false,
+  toolbar: [],
+  defaultToolbar: ["refresh", "filter"],
+  pagination: {
+    pageSize: 10,
+    pageSizes: [10, 20, 30, 50],
+  },
+  request: { page_no: "page_no", page_size: "page_size" },
+  indexAction: async (params) => {
+    const res = await GencodeAPI.listTable(params as GenTablePageQuery);
+    return {
+      total: res.data.data.total,
+      list: res.data.data.items,
+    };
+  },
+});
 
 const settingsStore = useSettingsStore();
 
@@ -1069,9 +1047,6 @@ const filteredTreeData = computed<TreeNode[]>(() => {
   const filtered = treeData.value.map((n) => cloneFilter(n)).filter(Boolean) as TreeNode[];
   return filtered;
 });
-
-// 按钮状态计算
-const canGenerate = computed(() => ids.value.length > 0);
 
 // ===== 功能函数 =====
 
@@ -1194,22 +1169,6 @@ async function handlePreview(row: GenTableSchema): Promise<void> {
   }
 }
 
-/** 查询表集合 */
-async function loadingData(): Promise<void> {
-  loading.value = true;
-  try {
-    const response = await GencodeAPI.listTable(queryFormData);
-    if (response?.data?.data) {
-      tableList.value = response.data.data.items;
-      total.value = response.data.data.total;
-    }
-  } catch (error) {
-    console.error("获取表数据失败:", error);
-  } finally {
-    loading.value = false;
-  }
-}
-
 /** 表格行内生成代码操作 */
 async function handleGenTable(targetGenType: string, row?: GenTableSchema): Promise<void> {
   let tbNames: string | string[] = [];
@@ -1272,7 +1231,7 @@ async function handleSynchDb(row: GenTableSchema): Promise<void> {
 
     loading.value = true;
     await GencodeAPI.syncDb(tableName);
-    loadingData(); // 同步成功后刷新列表
+    refreshList();
   } catch (error) {
     if (error !== "cancel") {
       console.error("同步表结构失败:", error);
@@ -1280,17 +1239,6 @@ async function handleSynchDb(row: GenTableSchema): Promise<void> {
   } finally {
     loading.value = false;
   }
-}
-
-/** 重置按钮操作 */
-async function handleRefresh() {
-  dateRange.value = [];
-  // 手动重置表单
-  queryFormData.page_no = 1;
-  queryFormData.page_size = 10;
-  queryFormData.table_name = undefined;
-  queryFormData.table_comment = undefined;
-  await loadingData();
 }
 
 /** 多选框选中数据 - 主表格 */
@@ -1353,15 +1301,12 @@ async function handleDelete(row?: GenTableSchema): Promise<void> {
       type: "warning",
     });
 
-    loading.value = true;
     await GencodeAPI.deleteTable(tableIds);
-    loadingData();
+    refreshList();
   } catch (error) {
     if (error !== "cancel") {
       console.error("删除表数据失败:", error);
     }
-  } finally {
-    loading.value = false;
   }
 }
 
@@ -1432,7 +1377,7 @@ async function handleCreateTable(sql: string): Promise<void> {
     await GencodeAPI.createTable(sql);
     createTableVisible.value = false;
     createContent.value = "";
-    loadingData();
+    refreshList();
     // 创建成功后自动打开导入弹窗
     importVisible.value = true;
     await getDbList();
@@ -1462,14 +1407,12 @@ async function handleImportTable(): Promise<void> {
     const tableNames = tables.value.map((table) => table.table_name || "");
     await GencodeAPI.importTable(tableNames);
     importVisible.value = false;
-    loadingData(); // 导入成功后刷新已导入的表列表
+    refreshList();
     // 导入成功后自动打开代码生成抽屉
     if (tables.value.length === 1) {
-      // 只导入了一个表，刷新列表后自动打开该表的代码生成
-      await loadingData();
-      const importedTable = tableList.value.find(
-        (t) => t.table_name === tables.value[0].table_name
-      );
+      await nextTick();
+      const list = (unref(contentRef.value?.pageData) ?? []) as GenTableSchema[];
+      const importedTable = list.find((t) => t.table_name === tables.value[0].table_name);
       if (importedTable) {
         await handlePreviewTable(importedTable);
       }
@@ -1513,16 +1456,8 @@ async function handleImportQuery(): Promise<void> {
 
 /** 导入弹窗重置按钮操作 */
 async function handleImportReset(): Promise<void> {
-  if (queryRef.value) {
-    queryRef.value.resetFields();
-  }
+  importQueryRef.value?.resetFields();
   await handleImportQuery();
-}
-
-/** 搜索按钮操作 */
-async function handleQuery(): Promise<void> {
-  queryFormData.page_no = 1;
-  await loadingData();
 }
 
 // 路由和导航
@@ -1535,9 +1470,14 @@ onActivated(async () => {
   const time = route.query.t;
   if (time != null && String(time) !== uniqueId.value) {
     uniqueId.value = String(time);
-    queryFormData.page_no = Number(route.query.page_no || 1);
-    dateRange.value = [];
-    await loadingData();
+    const pageNo = Number(route.query.page_no || 1);
+    await nextTick();
+    if (contentRef.value) {
+      contentRef.value.pagination.currentPage = pageNo;
+      const q = searchRef.value?.getQueryParams() ?? {};
+      const f = contentRef.value.getFilterParams?.() ?? {};
+      contentRef.value.fetchPageData({ ...q, ...f }, false);
+    }
   }
 });
 
@@ -1708,14 +1648,6 @@ async function loadTableDetail(id: number | string) {
     loading.value = false;
   }
 }
-
-// ===== 生命周期函数
-
-/** 组件挂载时 */
-onMounted(() => {
-  // 初始化数据加载
-  loadingData();
-});
 </script>
 
 <style lang="scss" scoped></style>

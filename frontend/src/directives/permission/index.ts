@@ -20,11 +20,12 @@ export const hasPerm: Directive = {
     const { roles } = useUserStore().basicInfo;
     const userPrems = useUserStore().prems;
 
-    // 超级管理员拥有所有权限，如果是"*:*:*"权限标识，则不需要进行权限校验
-    if (
-      (roles && roles.map((role) => role.code).includes(ROLE_ROOT)) ||
-      requiredPerms.includes("*:*:*")
-    ) {
+    const isWildcardBypass =
+      (Array.isArray(requiredPerms) && requiredPerms.some((p) => p === "*:*:*")) ||
+      requiredPerms === "*:*:*";
+
+    // 超级管理员；或指令显式传入 "*:*:*" 时跳过校验（勿用 includes 子串匹配，避免含 "*:*:*" 的权限被误放行）
+    if ((roles && roles.map((r) => r.code).includes(ROLE_ROOT)) || isWildcardBypass) {
       return;
     }
 

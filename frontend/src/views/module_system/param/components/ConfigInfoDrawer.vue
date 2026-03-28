@@ -1,10 +1,10 @@
 <template>
-  <el-drawer
+  <EnhancedDrawer
     v-model="drawerVisible"
     title="配置中心"
     :size="drawerSize"
     destroy-on-close
-    @closed="onDrawerClosed"
+    @close="onDrawerClosed"
   >
     <el-tabs v-model="activeTabRef" type="border-card">
       <!-- 网站配置 -->
@@ -279,7 +279,7 @@
         保存
       </el-button>
     </template>
-  </el-drawer>
+  </EnhancedDrawer>
 </template>
 
 <script lang="ts" setup>
@@ -288,6 +288,7 @@ import ParamsAPI, { type ConfigTable } from "@/api/module_system/params";
 import { useConfigStore } from "@/store";
 import { useI18n } from "vue-i18n";
 import { ElMessage, ElMessageBox } from "element-plus";
+import EnhancedDrawer from "@/components/CURD/EnhancedDrawer.vue";
 import SingleImageUpload from "@/components/Upload/SingleImageUpload.vue";
 import { useAppStore } from "@/store/modules/app.store";
 import { DeviceEnum } from "@/enums/settings/device.enum";
@@ -651,11 +652,6 @@ const demoConfigs = computed(() => ({
   ip_white_list: configStore.configData.ip_white_list,
 }));
 
-// 在组件挂载时初始化列表
-onMounted(() => {
-  initializeLists();
-});
-
 // logo配置项
 const logoConfigs = computed(() => ({
   sys_web_logo: {
@@ -692,8 +688,8 @@ const handleUploadError = (error: any) => {
   ElMessage.error(`上传失败：${error.message || "请稍后重试"}`);
 };
 
-// 生命周期钩子
 onMounted(() => {
+  initializeLists();
   configStore.getConfig();
 });
 </script>

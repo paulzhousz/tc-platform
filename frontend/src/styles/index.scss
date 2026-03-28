@@ -13,10 +13,35 @@
 .app-container {
   display: flex;
   flex-direction: column;
+  /* 不用 gap：否则 ExportModal/抽屉 等块级兄弟会与 PageContent 之间多出一道 16px，表格用 100vh 时高度也不对 */
+  gap: 0;
   height: 100%;
   padding: 16px;
   overflow: auto;
   border-radius: 4px;
+}
+
+/* 与搜索区纵向间距（替代原 gap）；主表格占满剩余高度，便于 el-table height:100% */
+.app-container > .el-card.data-table {
+  flex: 1;
+  min-height: 0;
+  margin-top: 16px;
+}
+
+.app-container > .el-card.data-table:first-child {
+  margin-top: 0;
+}
+
+/* 用户管理等：首行是 el-row 时占满高度 */
+.app-container > .el-row {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 块级弹窗宿主不参与纵向 flex 分配，避免挤压主表格 */
+.app-container > .curd-export-modal-host,
+.app-container > .curd-import-modal-host {
+  flex: 0 0 auto;
 }
 
 // ==================== 搜索区域样式 ====================
@@ -29,18 +54,39 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* 嵌套在 el-row/el-col 等内部时，与上方搜索区留白 */
   margin-top: 16px;
 
-  // 表格工具栏区域
+  // 表格工具栏区域（与 PageSearch+PageContent 各业务页 #toolbar 插槽一致：flex 换行，避免 el-row 挤压右侧）
   &__toolbar {
     display: flex;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    column-gap: 12px;
+    align-items: flex-start;
     justify-content: space-between;
     margin-bottom: 16px;
 
     &--left,
     &--right {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
+      align-items: center;
+
+      @media (min-width: 768px) {
+        gap: 12px;
+      }
+
+      .el-button {
+        margin-right: 0 !important;
+        margin-left: 0 !important;
+      }
+    }
+
+    &--right {
+      flex-shrink: 0;
+      justify-content: flex-end;
     }
   }
 
@@ -62,6 +108,8 @@
     justify-content: flex-end;
   }
 }
+
+/* 主表格 margin-top 见上；此处保留嵌套在非直接子级时的默认 .data-table margin-top */
 
 // 进度条颜色
 #nprogress .bar {

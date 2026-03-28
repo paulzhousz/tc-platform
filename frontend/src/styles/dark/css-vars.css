@@ -211,3 +211,30 @@ html.dark .el-table {
 html .el-table.el-table--striped {
   --el-fill-color-lighter: var(--el-table-striped-row-bg);
 }
+
+/*
+ * 缝隙/画布与浅分割线：与主题色同系、略淡（color-mix 随 --el-color-primary 与换肤联动）
+ * 卡片/浮层面仍用 --el-bg-color-overlay，仅大面积底与细线带极轻主色倾向
+ */
+:root,
+html :root {
+  --el-bg-color: color-mix(in srgb, var(--el-color-primary, #4080ff) 5%, #f8fafc 95%);
+  --el-bg-color-page: var(--el-bg-color);
+  --el-border-color: color-mix(in srgb, var(--el-color-primary, #4080ff) 9%, #cbd5e1 91%);
+  --el-border-color-light: color-mix(in srgb, var(--el-color-primary, #4080ff) 11%, #e2e8f0 89%);
+  --el-border-color-lighter: color-mix(in srgb, var(--el-color-primary, #4080ff) 12%, #eceff1 88%);
+  --el-border-color-extra-light: color-mix(in srgb, var(--el-color-primary, #4080ff) 10%, #f2f4f8 90%);
+  --el-fill-color-light: color-mix(in srgb, var(--el-color-primary, #4080ff) 7%, #f1f5f9 93%);
+  --el-menu-hover-bg-color: color-mix(in srgb, var(--el-color-primary, #4080ff) 8%, #f3f6fb 92%);
+}
+
+html.dark {
+  --el-bg-color: color-mix(in srgb, var(--el-color-primary, #4080ff) 5%, #0f172a 95%);
+  --el-bg-color-page: var(--el-bg-color);
+  --el-border-color: color-mix(in srgb, var(--el-color-primary, #4080ff) 12%, #334155 88%);
+  --el-border-color-light: color-mix(in srgb, var(--el-color-primary, #4080ff) 10%, #475569 90%);
+  --el-border-color-lighter: color-mix(in srgb, var(--el-color-primary, #4080ff) 12%, #3d4f69 88%);
+  --el-border-color-extra-light: color-mix(in srgb, var(--el-color-primary, #4080ff) 10%, #334155 90%);
+  --el-fill-color-light: color-mix(in srgb, var(--el-color-primary, #4080ff) 8%, #334155 92%);
+  --el-menu-hover-bg-color: color-mix(in srgb, var(--el-color-primary, #4080ff) 10%, #1b2a45 90%);
+}

@@ -88,14 +88,10 @@ import { useRouter } from "vue-router";
 import { useUserStore, useLockStore } from "@/store";
 import { ElInput } from "element-plus";
 import { useNow } from "@/utils/dateUtil";
-import { useTagsViewStore } from "@/store";
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const tagsViewStore = useTagsViewStore();
-
-const { replace } = useRouter();
 
 const password = ref("");
 const loading = ref(false);
@@ -123,14 +119,12 @@ async function unLock() {
   }
 }
 
-// 返回登录
+// 返回登录（logout 成功会 resetAllState；失败时再清一次本地，避免仍带 token）
 async function goLogin() {
   await userStore.logout().catch(() => {});
-  userStore.resetAllState();
-  tagsViewStore.delAllViews();
-  router.push(`/login?redirect=${route.fullPath}`);
+  await userStore.resetAllState();
   lockStore.resetLockInfo();
-  replace("/login");
+  await router.replace(`/login?redirect=${encodeURIComponent(route.fullPath)}`);
 }
 
 const passwordInputRef = ref<InstanceType<typeof ElInput>>();

@@ -1,5 +1,8 @@
 // https://cn.vitejs.dev/guide/env-and-mode
 
+/// <reference types="vite/client" />
+/// <reference types="element-plus/global" />
+
 // TypeScript 类型提示都为 string： https://github.com/vitejs/vite/issues/6930
 interface ImportMetaEnv {
   /** 环境 */

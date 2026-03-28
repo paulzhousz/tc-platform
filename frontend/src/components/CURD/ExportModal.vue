@@ -1,12 +1,11 @@
 <template>
-  <div>
+  <div class="curd-export-modal-host">
     <!-- 导出弹窗 -->
-    <el-dialog
+    <EnhancedDialog
       v-model="exportsModalVisible"
-      :align-center="true"
       title="导出数据"
       width="600px"
-      style="padding-right: 0"
+      dialog-class="curd-embed-dialog"
       @close="handleCloseExportsModal"
     >
       <!-- 滚动 -->
@@ -59,11 +58,12 @@
           <el-button @click="handleCloseExportsModal">取 消</el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
   </div>
 </template>
 
 <script lang="ts" setup>
+import EnhancedDialog from "./EnhancedDialog.vue";
 import ExcelJS from "exceljs";
 import type { IContentConfig, IObject } from "./types";
 import { useThrottleFn } from "@vueuse/core";

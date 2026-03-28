@@ -33,10 +33,10 @@ export function setupPermission() {
         }
       }
     } catch (error) {
-      // 错误处理：重置状态并跳转登录
+      // 错误处理：重置状态并跳转登录（保留 redirect 与未登录分支一致）
       console.error("Route guard error:", error);
       await useUserStore().resetAllState();
-      next("/login");
+      next(`/login?redirect=${encodeURIComponent(to.fullPath)}`);
       NProgress.done();
     }
   });
@@ -82,21 +82,20 @@ async function handleAuthenticatedUser(
       return;
     }
 
-    // 动态设置页面标题
-    const title = (to.params.title as string) || (to.query.title as string);
-    if (title) {
-      to.meta.title = title;
+    // 动态设置页面标题（仅做简单净化，避免 query 注入标签/过长字符串影响标签栏展示）
+    const rawTitle = (to.params.title as string) || (to.query.title as string);
+    if (rawTitle && typeof rawTitle === "string") {
+      const safe = rawTitle.replace(/[<>]/g, "").trim().slice(0, 64);
+      if (safe) {
+        to.meta.title = safe;
+      }
     }
 
     next();
   } catch (error) {
     console.error("❌ Route guard error:", error);
     await useUserStore().resetAllState();
-    // 强制跳转到登录页
-    next("/login");
+    next(`/login?redirect=${encodeURIComponent(to.fullPath)}`);
     NProgress.done();
   }
-  router.afterEach(() => {
-    NProgress.done();
-  });
 }

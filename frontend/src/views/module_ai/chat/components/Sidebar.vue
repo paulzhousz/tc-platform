@@ -282,8 +282,9 @@ const handleUserCommand = (command: string) => {
   } else if (command === "settings") {
     ElMessage.info("设置功能开发中");
   } else if (command === "logout") {
-    userStore.logout();
-    router.push("/login");
+    userStore.logout().then(() => {
+      router.push("/login");
+    });
   }
 };
 

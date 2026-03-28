@@ -1,163 +1,86 @@
 <template>
   <div class="app-container">
-    <el-card class="data-table">
-      <template #header>
-        <div class="card-header">
-          <span>
-            <el-tooltip content="节点类型列表">
-              <QuestionFilled class="w-4 h-4 mx-1" />
-            </el-tooltip>
-            节点类型列表
-          </span>
-          <div class="search-container">
-            <el-form
-              ref="queryFormRef"
-              :model="queryFormData"
-              :inline="true"
-              label-suffix=":"
-              @submit.prevent="handleQuery"
-            >
-              <el-form-item prop="name" label="节点名称">
-                <el-input v-model="queryFormData.name" placeholder="请输入节点名称" clearable />
-              </el-form-item>
-              <el-form-item prop="code" label="节点编码">
-                <el-input v-model="queryFormData.code" placeholder="请输入节点编码" clearable />
-              </el-form-item>
-              <el-form-item class="search-buttons">
-                <el-button
-                  v-hasPerm="['module_task:node:query']"
-                  type="primary"
-                  icon="search"
-                  native-type="submit"
-                >
-                  查询
-                </el-button>
-                <el-button
-                  v-hasPerm="['module_task:node:query']"
-                  icon="refresh"
-                  @click="handleResetQuery"
-                >
-                  重置
-                </el-button>
-              </el-form-item>
-            </el-form>
-          </div>
+    <PageSearch
+      ref="searchRef"
+      :search-config="searchConfig"
+      @query-click="handleQueryClick"
+      @reset-click="handleResetClick"
+    />
+
+    <PageContent
+      ref="contentRef"
+      :content-config="contentConfig"
+      @search-click="handleToggleSearch"
+      @add-click="handleOpenDialog('create')"
+    >
+      <template #table="{ data, loading, tableRef, onSelectionChange, pagination }">
+        <div class="data-table__content">
+          <el-table
+            :ref="tableRef as any"
+            v-loading="loading"
+            :data="data"
+            height="100%"
+            border
+            stripe
+            @selection-change="onSelectionChange"
+          >
+            <template #empty>
+              <el-empty :image-size="80" description="暂无数据" />
+            </template>
+            <el-table-column type="selection" align="center" min-width="55" />
+            <el-table-column type="index" fixed label="序号" min-width="60">
+              <template #default="scope">
+                {{ (pagination.currentPage - 1) * pagination.pageSize + scope.$index + 1 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="节点名称" prop="name" min-width="140" />
+            <el-table-column label="节点编码" prop="code" min-width="120" />
+            <el-table-column label="存储器" prop="jobstore" min-width="80" />
+            <el-table-column label="执行器" prop="executor" min-width="80" />
+            <el-table-column label="创建时间" prop="created_time" min-width="180" sortable />
+
+            <OperationColumn :list-data-length="data.length">
+              <template #default="scope">
+                <el-space class="flex">
+                  <el-button
+                    v-hasPerm="['module_task:cronjob:node:execute']"
+                    type="warning"
+                    size="small"
+                    link
+                    icon="VideoPlay"
+                    @click="handleOpenExecuteDialog(scope.row)"
+                  >
+                    调试
+                  </el-button>
+                  <el-button
+                    v-hasPerm="['module_task:cronjob:node:update']"
+                    type="primary"
+                    size="small"
+                    link
+                    icon="edit"
+                    @click="handleOpenDialog('update', scope.row.id)"
+                  >
+                    编辑
+                  </el-button>
+                  <el-button
+                    v-hasPerm="['module_task:cronjob:node:delete']"
+                    type="danger"
+                    size="small"
+                    link
+                    icon="delete"
+                    @click="handleRowDelete(scope.row.id)"
+                  >
+                    删除
+                  </el-button>
+                </el-space>
+              </template>
+            </OperationColumn>
+          </el-table>
         </div>
       </template>
+    </PageContent>
 
-      <div class="data-table__toolbar">
-        <div class="data-table__toolbar--left">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_task:node:create']"
-                type="success"
-                icon="plus"
-                @click="handleOpenDialog('create')"
-              >
-                新增
-              </el-button>
-            </el-col>
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_task:node:delete']"
-                type="danger"
-                icon="delete"
-                :disabled="selectIds.length === 0"
-                @click="handleDelete(selectIds)"
-              >
-                批量删除
-              </el-button>
-            </el-col>
-          </el-row>
-        </div>
-        <div class="data-table__toolbar--right">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-tooltip content="刷新">
-                <el-button type="primary" icon="refresh" circle @click="handleRefresh" />
-              </el-tooltip>
-            </el-col>
-          </el-row>
-        </div>
-      </div>
-
-      <div class="data-table__content">
-        <el-table
-          ref="dataTableRef"
-          v-loading="loading"
-          :data="pageTableData"
-          height="calc(100vh - 440px)"
-          max-height="calc(100vh - 440px)"
-          border
-          stripe
-          @selection-change="handleSelectionChange"
-        >
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column type="selection" align="center" min-width="55" />
-          <el-table-column type="index" fixed label="序号" min-width="60">
-            <template #default="scope">
-              {{ (queryFormData.page_no - 1) * queryFormData.page_size + scope.$index + 1 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="节点名称" prop="name" min-width="140" />
-          <el-table-column label="节点编码" prop="code" min-width="120" />
-          <el-table-column label="存储器" prop="jobstore" min-width="80" />
-          <el-table-column label="执行器" prop="executor" min-width="80" />
-          <el-table-column label="创建时间" prop="created_time" min-width="180" sortable />
-
-          <OperationColumn :list-data-length="pageTableData.length">
-            <template #default="scope">
-              <el-space class="flex">
-                <el-button
-                  v-hasPerm="['module_task:node:execute']"
-                  type="warning"
-                  size="small"
-                  link
-                  icon="VideoPlay"
-                  @click="handleOpenExecuteDialog(scope.row)"
-                >
-                  调试
-                </el-button>
-                <el-button
-                  v-hasPerm="['module_task:node:update']"
-                  type="primary"
-                  size="small"
-                  link
-                  icon="edit"
-                  @click="handleOpenDialog('update', scope.row.id)"
-                >
-                  编辑
-                </el-button>
-                <el-button
-                  v-hasPerm="['module_task:node:delete']"
-                  type="danger"
-                  size="small"
-                  link
-                  icon="delete"
-                  @click="handleDelete([scope.row.id])"
-                >
-                  删除
-                </el-button>
-              </el-space>
-            </template>
-          </OperationColumn>
-        </el-table>
-      </div>
-
-      <template #footer>
-        <pagination
-          v-model:total="total"
-          v-model:page="queryFormData.page_no"
-          v-model:limit="queryFormData.page_size"
-          @pagination="loadingData"
-        />
-      </template>
-    </el-card>
-
-    <el-dialog
+    <EnhancedDialog
       v-model="dialogVisible.visible"
       :title="dialogVisible.title"
       width="1000px"
@@ -277,12 +200,12 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="handleCloseDialog">取消</el-button>
-          <el-button type="primary" @click="handleSubmit">确定</el-button>
+          <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
 
-    <el-dialog
+    <EnhancedDialog
       v-model="executeDialogVisible"
       title="调试节点"
       width="700px"
@@ -318,6 +241,7 @@
             trigger="click"
             :persistent="false"
             placement="auto-end"
+            popper-class="node-cron-popover-fix"
           >
             <template #reference>
               <el-input
@@ -404,9 +328,11 @@
 
       <template #footer>
         <el-button @click="handleCloseExecuteDialog">取消</el-button>
-        <el-button type="primary" @click="handleExecuteNode">确认</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleExecuteNode">
+          确认
+        </el-button>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
   </div>
 </template>
 
@@ -416,9 +342,20 @@ defineOptions({
   inheritAttrs: false,
 });
 
-import NodeAPI, { NodeTable, NodeForm, NodePageQuery, TriggerType } from "@/api/module_task/node";
+import NodeAPI, {
+  NodeTable,
+  NodeForm,
+  NodePageQuery,
+  TriggerType,
+} from "@/api/module_task/cronjob/node";
 import { useDictStore } from "@/store/index";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDialog from "@/components/CURD/EnhancedDialog.vue";
+import type { IContentConfig, ISearchConfig } from "@/components/CURD/types";
+import { useCrudList } from "@/components/CURD/useCrudList";
 import { nextTick, onMounted, reactive, ref } from "vue";
+import { ElMessage } from "element-plus";
 import { vue3CronPlus } from "vue3-cron-plus";
 import "vue3-cron-plus/dist/index.css";
 import OperationColumn from "@/components/OperationColumn/index.vue";
@@ -441,23 +378,70 @@ const codeEditorOptions: EditorConfiguration = {
   autofocus: false,
 };
 
-const queryFormRef = ref();
+const { searchRef, contentRef, handleQueryClick, handleResetClick, refreshList } = useCrudList();
 const dataFormRef = ref();
 const executeFormRef = ref();
-const total = ref(0);
-const selectIds = ref<number[]>([]);
-const loading = ref(false);
+const submitLoading = ref(false);
 const openCron = ref(false);
 const openInterval = ref(false);
 const codeEditorRef = ref<CmComponentRef>();
 
-const pageTableData = ref<NodeTable[]>([]);
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_task:cronjob:node",
+  colon: true,
+  isExpandable: false,
+  showNumber: 2,
+  showToggle: false,
+  form: { labelWidth: "auto" },
+  formItems: [
+    {
+      prop: "name",
+      label: "节点名称",
+      type: "input",
+      attrs: { placeholder: "请输入节点名称", clearable: true },
+    },
+    {
+      prop: "code",
+      label: "节点编码",
+      type: "input",
+      attrs: { placeholder: "请输入节点编码", clearable: true },
+    },
+  ],
+});
 
-const queryFormData = reactive<NodePageQuery>({
-  page_no: 1,
-  page_size: 10,
-  name: undefined,
-  code: undefined,
+const contentConfig = reactive<IContentConfig<NodePageQuery>>({
+  permPrefix: "module_task:cronjob:node",
+  cols: [],
+  hideColumnFilter: true,
+  toolbar: ["add", "delete"],
+  defaultToolbar: ["refresh"],
+  pagination: {
+    pageSize: 10,
+    pageSizes: [10, 20, 30, 50],
+  },
+  request: { page_no: "page_no", page_size: "page_size" },
+  indexAction: async (params) => {
+    const res = await NodeAPI.listNode(params as NodePageQuery);
+    return {
+      total: res.data.data.total,
+      list: res.data.data.items,
+    };
+  },
+  deleteAction: (ids) =>
+    NodeAPI.deleteNode(
+      ids
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n) && n > 0)
+    ),
+  deleteConfirm: {
+    title: "警告",
+    message:
+      "确认删除选中的节点吗？\n" +
+      "此操作将同时删除节点定义并移除调度器中的相关任务。\n" +
+      "正在运行的任务会被立即移除，待执行任务的日志将被标记为已取消。",
+    type: "warning",
+  },
 });
 
 const defaultCodeBlock = `def handler(*args, **kwargs):
@@ -471,7 +455,7 @@ const defaultCodeBlock = `def handler(*args, **kwargs):
     """
     
     # 从工程中导入方法
-    from app.plugin.module_task.node.handlers.demo_handler import (
+    from app.plugin.module_task.cronjob.node.handlers.demo_handler import (
         demo_handler,
         process_data
     )
@@ -558,32 +542,12 @@ const executeRules = reactive({
   trigger_args: [{ required: true, message: "请设置执行参数", trigger: "blur" }],
 });
 
-async function handleRefresh() {
-  await loadingData();
+function handleToggleSearch() {
+  searchRef.value?.toggleVisible();
 }
 
-async function loadingData() {
-  loading.value = true;
-  try {
-    const response = await NodeAPI.listNode(queryFormData);
-    pageTableData.value = response.data.data.items;
-    total.value = response.data.data.total;
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function handleQuery() {
-  queryFormData.page_no = 1;
-  loadingData();
-}
-
-async function handleResetQuery() {
-  queryFormRef.value.resetFields();
-  queryFormData.page_no = 1;
-  loadingData();
+function handleRowDelete(id: number) {
+  contentRef.value?.handleDelete(id);
 }
 
 const initialFormData: Partial<NodeForm> = {
@@ -609,10 +573,6 @@ async function resetForm() {
   Object.assign(formData, initialFormData);
   argsList.value = [];
   kwargsList.value = [];
-}
-
-async function handleSelectionChange(selection: any) {
-  selectIds.value = selection.map((item: any) => item.id);
 }
 
 async function handleCloseDialog() {
@@ -654,7 +614,7 @@ function handleDialogOpened() {
 async function handleSubmit() {
   dataFormRef.value.validate(async (valid: any) => {
     if (valid) {
-      loading.value = true;
+      submitLoading.value = true;
       const id = formData.id;
       try {
         const submitData = {
@@ -676,42 +636,14 @@ async function handleSubmit() {
         }
         dialogVisible.visible = false;
         resetForm();
-        handleResetQuery();
+        refreshList();
       } catch (error: any) {
         console.log(error);
       } finally {
-        loading.value = false;
+        submitLoading.value = false;
       }
     }
   });
-}
-
-async function handleDelete(ids: number[]) {
-  ElMessageBox.confirm(
-    "确认删除选中的节点吗？\n" +
-      "此操作将同时删除节点定义并移除调度器中的相关任务。\n" +
-      "正在运行的任务会被立即移除，待执行任务的日志将被标记为已取消。",
-    "警告",
-    {
-      confirmButtonText: "确定",
-      cancelButtonText: "取消",
-      type: "warning",
-    }
-  )
-    .then(async () => {
-      try {
-        loading.value = true;
-        await NodeAPI.deleteNode(ids);
-        handleResetQuery();
-      } catch (error: any) {
-        console.error(error);
-      } finally {
-        loading.value = false;
-      }
-    })
-    .catch(() => {
-      ElMessageBox.close();
-    });
 }
 
 const handlechangeCron = (cronStr: string) => {
@@ -749,7 +681,7 @@ async function handleExecuteNode() {
   }
 
   try {
-    loading.value = true;
+    submitLoading.value = true;
     const params: any = {
       trigger: executeFormData.trigger,
     };
@@ -764,8 +696,7 @@ async function handleExecuteNode() {
 
     handleCloseExecuteDialog();
 
-    // 重新加载数据
-    await loadingData();
+    refreshList();
   } catch (error: any) {
     ElMessage.error({
       message: error.response?.data?.msg || "调试失败",
@@ -774,13 +705,13 @@ async function handleExecuteNode() {
     });
     console.error(error);
   } finally {
-    loading.value = false;
+    submitLoading.value = false;
   }
 }
 
 onMounted(async () => {
   await dictStore.getDict(["sys_job_store", "sys_job_executor"]);
-  loadingData();
+  refreshList();
 });
 </script>
 
@@ -840,5 +771,35 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+</style>
+
+<!-- popover 挂载到 body，需单独写；修复 vue3-cron-plus 全局 .el-tag--info { margin-left: -60px } 误伤多选下拉里 tag -->
+<style lang="scss">
+.node-cron-popover-fix {
+  .vue3-cron-plus-container .el-select .el-tag {
+    margin-left: 0 !important;
+  }
+
+  /* 具体秒数等多选行：避免文案与选择器挤在同一行错位 */
+  .vue3-cron-plus-container .tabBody .el-radio.long {
+    align-items: flex-start;
+    height: auto;
+    white-space: normal;
+
+    .el-radio__label {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+      align-items: center;
+      line-height: 1.5;
+    }
+
+    .el-select {
+      flex: 1 1 200px;
+      min-width: 180px;
+      max-width: 100%;
+    }
+  }
 }
 </style>

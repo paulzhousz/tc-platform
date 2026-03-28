@@ -41,12 +41,6 @@ export const constantRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/error/500.vue"),
   },
   {
-    path: "/:pathMatch(.*)*",
-    component: () => import("@/views/error/404.vue"),
-    meta: { hidden: true, title: "404" },
-  },
-  // 以下内容必须放在后面
-  {
     path: "/",
     name: "/",
     redirect: "/home",
@@ -79,6 +73,12 @@ export const constantRoutes: RouteRecordRaw[] = [
         component: () => import("@/views/module_application/myapp/components/InternalApp.vue"),
       },
     ],
+  },
+  // 通配 404 必须置于静态路由最后，否则会抢先匹配 /、/home 等
+  {
+    path: "/:pathMatch(.*)*",
+    component: () => import("@/views/error/404.vue"),
+    meta: { hidden: true, title: "404" },
   },
 ];
 

@@ -1,6 +1,6 @@
 import request from "@/utils/request";
 
-const API_PATH = "/{{ package_name }}/{{ business_name|lower }}";
+const API_PATH = "/{{ api_route_prefix }}/{{ business_name|lower }}";
 
 const {{ class_name }}API = {
   // 列表查询
@@ -95,12 +95,12 @@ export default {{ class_name }}API;
 // 列表查询参数
 export interface {{ class_name }}PageQuery extends PageQuery {
   {% for column in columns %}
-  {% if column.is_query and column.column != "BETWEEN" and column.column_name not in ['created_time', 'updated_time'] %}
+  {# query_type 为 BETWEEN 的字段由范围查询或单独字段表达，勿生成标量；勿使用不存在的 column.column #}
+  {% if column.is_query and column.query_type != "BETWEEN" and column.column_name not in ['created_time', 'updated_time'] %}
+  {# LIKE 走字符串；EQ 等与列 python_type 一致（来自 DB→Python 映射） #}
   {{ column.column_name }}?: {{
-    'string' if ('status' in (column.python_field|lower)) or (column.html_type == 'radio')
-    else 'number' if column.is_pk == '1'
-    else 'number' if column.column_name in ['created_id', 'updated_id']
-    else 'string'
+    'string' if column.query_type == 'LIKE'
+    else (column.python_type | python_to_ts_type)
   }};
   {% endif %}
   {% endfor %}
@@ -112,11 +112,7 @@ export interface {{ class_name }}PageQuery extends PageQuery {
 export interface {{ class_name }}Table extends BaseType {
   {% for column in columns %}
   {% if column.column_name not in ['id', 'uuid', 'status', 'description', 'created_time', 'updated_time'] %}
-  {{ column.column_name }}?: {{
-    'boolean' if ('status' in (column.column_name|lower)) or (column.html_type == 'radio')
-    else 'number' if column.is_pk == 1
-    else 'string'
-  }};
+  {{ column.column_name }}?: {{ column.python_type | python_to_ts_type }};
   {% endif %}
   {% endfor %}
   created_by?: CommonType;
@@ -126,12 +122,8 @@ export interface {{ class_name }}Table extends BaseType {
 // 新增/修改/详情表单参数
 export interface {{ class_name }}Form extends BaseFormType {
   {% for column in columns %}
-  {% if (column.is_insert == 1 or column.is_edit == 1) and column.column_name not in ['id', 'uuid', 'status', 'description', 'created_time', 'updated_time', 'created_id', 'updated_id'] %}
-  {{ column.column_name }}?: {{
-    'boolean' if ('status' in (column.column_name|lower)) or (column.html_type == 'radio')
-    else 'number' if column.is_pk == 1
-    else 'string'
-  }};
+  {% if (column.is_insert or column.is_edit) and column.column_name not in ['id', 'uuid', 'status', 'description', 'created_time', 'updated_time', 'created_id', 'updated_id'] %}
+  {{ column.column_name }}?: {{ column.python_type | python_to_ts_type }};
   {% endif %}
   {% endfor %}
 }

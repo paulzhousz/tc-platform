@@ -14,6 +14,7 @@ DateTimeStr = Annotated[
     PlainSerializer(
         lambda x: x.strftime("%Y-%m-%d %H:%M:%S") if isinstance(x, datetime) else str(x),
         return_type=str,
+        when_used="json",
     ),
     WithJsonSchema({"type": "string"}, mode="serialization"),
 ]
@@ -25,6 +26,7 @@ DateStr = Annotated[
     PlainSerializer(
         lambda x: x.strftime("%Y-%m-%d") if isinstance(x, date) else str(x),
         return_type=str,
+        when_used="json",
     ),
     WithJsonSchema({"type": "string"}, mode="serialization"),
 ]
@@ -36,6 +38,7 @@ TimeStr = Annotated[
     PlainSerializer(
         lambda x: x.strftime("%H:%M:%S") if isinstance(x, time) else str(x),
         return_type=str,
+        when_used="json",
     ),
     WithJsonSchema({"type": "string"}, mode="serialization"),
 ]

@@ -1,6 +1,6 @@
 import request from "@/utils/request";
 
-const API_PATH = "/task/job";
+const API_PATH = "/task/cronjob/job";
 
 const JobAPI = {
   getSchedulerStatus() {

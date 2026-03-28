@@ -1,5 +1,8 @@
 import { ElMessage } from "element-plus";
 
+/** 收藏数量上限（工作台「我的收藏」为 3 列 × 最多 5 排，共 15 个） */
+export const QUICK_LINK_MAX = 15;
+
 // 快速链接数据类型
 export interface QuickLink {
   title: string;
@@ -39,22 +42,29 @@ class QuickStartManager {
     }
   }
 
-  // 添加快速链接
-  addQuickLink(link: QuickLink): void {
+  /**
+   * 添加或更新快速链接。
+   * @returns 是否已保存；新增时若已达上限则提示并返回 false
+   */
+  addQuickLink(link: QuickLink): boolean {
     const links = this.getQuickLinks();
 
-    // 检查是否已存在相同路径的链接
     const existingIndex = links.findIndex((l) => l.href === link.href);
     if (existingIndex !== -1) {
-      // 更新现有链接
       links[existingIndex] = { ...links[existingIndex], ...link };
       ElMessage.success(`已更新快速链接：${link.title}`);
-    } else {
-      // 添加新链接
-      links.push(link);
+      this.saveQuickLinks(links);
+      return true;
     }
 
+    if (links.length >= QUICK_LINK_MAX) {
+      ElMessage.warning(`收藏已满（最多 ${QUICK_LINK_MAX} 个），请先移除后再添加`);
+      return false;
+    }
+
+    links.push(link);
     this.saveQuickLinks(links);
+    return true;
   }
 
   // 删除快速链接
@@ -62,6 +72,15 @@ class QuickStartManager {
     const links = this.getQuickLinks();
     const filteredLinks = links.filter((link) => link.id !== id);
 
+    if (filteredLinks.length < links.length) {
+      this.saveQuickLinks(filteredLinks);
+    }
+  }
+
+  /** 无 id 的旧数据可按路由路径移除 */
+  removeQuickLinkByHref(href: string): void {
+    const links = this.getQuickLinks();
+    const filteredLinks = links.filter((link) => link.href !== href);
     if (filteredLinks.length < links.length) {
       this.saveQuickLinks(filteredLinks);
     }

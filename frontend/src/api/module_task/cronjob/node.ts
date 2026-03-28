@@ -1,6 +1,6 @@
 import request from "@/utils/request";
 
-const API_PATH = "/task/node";
+const API_PATH = "/task/cronjob/node";
 
 const NodeAPI = {
   getNodeTypeOptions() {

@@ -12,7 +12,13 @@ from app.core.logger import log
 from app.core.router_class import OperationLogRoute
 from app.utils.common_util import bytes2file_response
 
-from .schema import GenDBTableSchema, GenTableOutSchema, GenTableQueryParam, GenTableSchema
+from .schema import (
+    GenCreateTableSqlBody,
+    GenDBTableSchema,
+    GenTableOutSchema,
+    GenTableQueryParam,
+    GenTableSchema,
+)
 from .service import GenTableService
 
 GenRouter = APIRouter(route_class=OperationLogRoute, prefix="/gencode", tags=["代码生成模块"])
@@ -145,7 +151,7 @@ async def gen_table_detail_controller(
     response_model=ResponseSchema[bool],
 )
 async def create_table_controller(
-    sql: Annotated[str, Body(description="SQL语句，用于创建表结构")],
+    body: GenCreateTableSqlBody,
     auth: Annotated[
         AuthSchema,
         Depends(AuthPermission(["module_generator:gencode:create"])),
@@ -155,13 +161,13 @@ async def create_table_controller(
     创建表结构
 
     参数:
-    - sql (str): SQL语句，用于创建表结构
+    - body (GenCreateTableSqlBody): 含 `sql` 字段的请求体（与前端 `data: { sql }` 一致）
     - auth (AuthSchema): 认证信息模型
 
     返回:
     - JSONResponse: 包含创建结果的JSON响应
     """
-    result = await GenTableService.create_table_service(auth, sql)
+    result = await GenTableService.create_table_service(auth, body.sql)
     log.info("创建表结构成功")
     return SuccessResponse(msg="创建表结构成功", data=result)
 
@@ -231,7 +237,7 @@ async def delete_gen_table_controller(
 )
 async def batch_gen_code_controller(
     table_names: Annotated[list[str], Body(description="表名列表")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_generator:gencode:patch"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_generator:gencode:operate"]))],
 ) -> StreamResponse:
     """
     批量生成代码

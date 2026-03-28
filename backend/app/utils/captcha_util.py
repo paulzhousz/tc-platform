@@ -145,7 +145,7 @@ class CaptchaUtil:
         text_draw = ImageDraw.Draw(text_image)
         text_draw.text((x, y), text, fill=(0, 0, 139), font=font)
         text_image = text_image.rotate(rotation, expand=1)
-        
+
         # 计算粘贴位置，使旋转后的文本居中
         text_width, text_height = text_image.size
         paste_x = (width - text_width) // 2

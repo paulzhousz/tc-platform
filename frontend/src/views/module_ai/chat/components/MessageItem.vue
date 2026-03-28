@@ -366,7 +366,7 @@ const formatFileSize = (bytes: number): string => {
             content: "";
             background: linear-gradient(
               transparent,
-              var(--chat-area-bg, var(--layout-content-canvas, var(--el-bg-color-page)))
+              var(--chat-area-bg, var(--el-bg-color-overlay))
             );
           }
         }
@@ -493,16 +493,12 @@ const formatFileSize = (bytes: number): string => {
 
       .message-body .message-text {
         padding: 10px 14px;
-        background: color-mix(in srgb, var(--el-color-primary) 10%, var(--el-bg-color-overlay));
-        border: 1px solid
-          color-mix(in srgb, var(--el-color-primary) 18%, var(--el-border-color-light));
+        background: var(--el-color-primary-light-9);
+        border: 1px solid var(--el-border-color-light);
         border-radius: 12px;
 
         &.collapsed::after {
-          background: linear-gradient(
-            transparent,
-            color-mix(in srgb, var(--el-color-primary) 10%, var(--el-bg-color-overlay))
-          );
+          background: linear-gradient(transparent, var(--el-color-primary-light-9));
         }
 
         :deep(pre) {

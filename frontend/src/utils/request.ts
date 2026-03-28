@@ -5,10 +5,9 @@ import axios, {
   type AxiosError,
 } from "axios";
 import qs from "qs";
-import { useUserStoreHook } from "@/store/modules/user.store";
 import { ResultEnum } from "@/enums/api/result.enum";
 import { Auth } from "@/utils/auth";
-import router from "@/router";
+import { redirectToLogin } from "@/utils/authRedirect";
 
 /**
  * 创建 HTTP 请求实例
@@ -26,18 +25,24 @@ const httpRequest: AxiosInstance = axios.create({
 httpRequest.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const accessToken = Auth.getAccessToken();
+    const auth = config.headers.Authorization;
 
-    // 如果 Authorization 设置为 no-auth，则不携带 Token
-    if (!config.headers.Authorization && accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`;
-    } else {
+    // 显式跳过鉴权（与单接口 headers 约定一致）
+    if (auth === "no-auth") {
       delete config.headers.Authorization;
+      return config;
+    }
+
+    // 未手动设置 Authorization 时自动附加 Bearer；已设置则保留（避免误删调用方传入的令牌）
+    if (!auth && accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
 
     return config;
   },
   (error) => {
-    ElMessage.error(error);
+    const msg = error instanceof Error ? error.message : String(error);
+    ElMessage.error(msg);
     return Promise.reject(error);
   }
 );
@@ -114,6 +119,22 @@ httpRequest.interceptors.response.use(
       }
     }
 
+    const status = error.response.status;
+
+    /** 是否为后端约定的 JSON 业务码结构 */
+    const hasApiCode =
+      data !== undefined &&
+      data !== null &&
+      typeof data === "object" &&
+      "code" in data &&
+      typeof (data as ApiResponse).code === "number";
+
+    // HTTP 401 且无约定 body（如网关仅返回状态码、HTML、空 body）：按登录失效处理
+    if (status === 401 && !hasApiCode) {
+      await redirectToLogin("登录已失效，请重新登录");
+      return Promise.reject(new Error("Unauthorized"));
+    }
+
     if (data?.code === ResultEnum.TOKEN_EXPIRED) {
       await redirectToLogin("登录已过期，请重新登录");
       return Promise.reject(new Error(data.msg));
@@ -132,27 +153,5 @@ httpRequest.interceptors.response.use(
     }
   }
 );
-
-/**
- * 重定向到登录页面
- */
-async function redirectToLogin(message: string = "请重新登录"): Promise<void> {
-  try {
-    ElNotification({
-      title: "提示",
-      message,
-      type: "warning",
-      duration: 3000,
-    });
-
-    await useUserStoreHook().resetAllState();
-
-    // 跳转到登录页，保留当前路由用于登录后跳转
-    const currentPath = router.currentRoute.value.fullPath;
-    await router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
-  } catch (error: any) {
-    ElMessage.error(error.message);
-  }
-}
 
 export default httpRequest;

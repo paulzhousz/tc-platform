@@ -109,7 +109,8 @@ import { useRouter } from "vue-router";
 
 import { DeviceEnum } from "@/enums/settings/device.enum";
 import { useAppStore, useSettingsStore, useUserStore, useLockStore } from "@/store";
-import { ThemeMode } from "@/enums/settings/theme.enum";
+import { SidebarColor, ThemeMode } from "@/enums/settings/theme.enum";
+import { LayoutMode } from "@/enums";
 
 // 导入子组件
 import MenuSearch from "@/components/MenuSearch/index.vue";
@@ -214,16 +215,29 @@ const handlelockScreen = () => {
   dialogVisible.value = true;
 };
 
-// 根据主题选择样式类
+// 根据主题和侧边栏配色方案选择样式类
 const navbarActionsClass = computed(() => {
-  const { theme } = settingStore;
+  const { theme, sidebarColorScheme, layout } = settingStore;
 
   // 暗黑主题下，所有布局都使用白色文字
   if (theme === ThemeMode.DARK) {
     return "navbar-actions--white-text";
   }
 
-  // 明亮主题下，使用深色文字
+  // 明亮主题下
+  if (theme === ThemeMode.LIGHT) {
+    // 顶部布局和混合布局的顶部区域：
+    // - 如果侧边栏是经典蓝色，使用白色文字
+    // - 如果侧边栏是极简白色，使用深色文字
+    if (layout === LayoutMode.TOP || layout === LayoutMode.MIX) {
+      if (sidebarColorScheme === SidebarColor.CLASSIC_BLUE) {
+        return "navbar-actions--white-text";
+      } else {
+        return "navbar-actions--dark-text";
+      }
+    }
+  }
+
   return "navbar-actions--dark-text";
 });
 
@@ -300,11 +314,30 @@ function logout() {
       transition: color 0.3s;
     }
 
+    // Element Plus 图标（如 el-icon）样式
+    :deep(.el-icon) {
+      color: var(--el-text-color-regular);
+      transition: color 0.3s;
+    }
+
     &:hover {
-      background: var(--el-fill-color-light);
+      background: transparent;
 
       :deep([class^="i-svg:"]) {
         color: var(--el-color-primary);
+      }
+
+      :deep(.el-icon) {
+        color: var(--el-color-primary);
+      }
+
+      // 搜索触发器：确保 hover 时是图标变色，而不是只出现边框变化
+      :deep(.command-palette-trigger) {
+        border-color: var(--el-border-color-lighter) !important;
+      }
+
+      :deep(.command-palette-trigger__left [class^="i-svg:"]) {
+        color: var(--el-color-primary) !important;
       }
     }
   }
@@ -321,12 +354,18 @@ function logout() {
       display: flex;
       align-items: center;
       justify-content: center;
+
+      // 给实际渲染的 el-avatar 增加边框
+      :deep(.el-avatar) {
+        border: 1px solid var(--el-color-primary);
+      }
     }
 
     &__avatar {
       flex-shrink: 0;
       width: 28px;
       height: 28px;
+      border: 1px solid var(--el-color-success);
       border-radius: 50%;
     }
 
@@ -336,7 +375,7 @@ function logout() {
       bottom: 0;
       width: 8px;
       height: 8px;
-      background-color: #50b731;
+      background-color: var(--el-color-success);
       border-radius: 50%;
       box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
     }
@@ -357,11 +396,27 @@ function logout() {
       color: color-mix(in srgb, var(--el-color-white) 85%, transparent);
     }
 
+    :deep(.el-icon) {
+      color: color-mix(in srgb, var(--el-color-white) 85%, transparent);
+    }
+
     &:hover {
-      background: color-mix(in srgb, var(--el-color-white) 10%, transparent);
+      background: transparent;
 
       :deep([class^="i-svg:"]) {
-        color: var(--el-color-white);
+        color: var(--el-color-primary);
+      }
+
+      :deep(.el-icon) {
+        color: var(--el-color-primary);
+      }
+
+      :deep(.command-palette-trigger) {
+        border-color: color-mix(in srgb, var(--el-color-white) 35%, transparent) !important;
+      }
+
+      :deep(.command-palette-trigger__left [class^="i-svg:"]) {
+        color: var(--el-color-primary) !important;
       }
     }
   }
@@ -379,9 +434,17 @@ function logout() {
     }
 
     &:hover {
-      background: rgba(0, 0, 0, 0.04);
+      background: transparent;
 
       :deep([class^="i-svg:"]) {
+        color: var(--el-color-primary) !important;
+      }
+
+      :deep(.command-palette-trigger) {
+        border-color: var(--el-border-color-lighter) !important;
+      }
+
+      :deep(.command-palette-trigger__left [class^="i-svg:"]) {
         color: var(--el-color-primary) !important;
       }
     }

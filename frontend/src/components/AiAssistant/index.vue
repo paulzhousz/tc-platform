@@ -782,11 +782,11 @@ onBeforeUnmount(() => {
     z-index: 9999;
     width: 60px;
     height: 60px;
-    box-shadow: 0 4px 12px rgba(2, 119, 252, 0.4);
+    box-shadow: var(--el-box-shadow);
     transition: all 0.3s ease;
 
     &:hover {
-      box-shadow: 0 6px 20px rgba(2, 119, 252, 0.6);
+      box-shadow: var(--el-box-shadow-dark);
       transform: scale(1.1);
     }
 
@@ -806,12 +806,12 @@ onBeforeUnmount(() => {
     height: 42px;
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: var(--el-color-white);
     cursor: pointer;
     user-select: none;
     background: var(--el-color-primary);
     border-radius: 999px;
-    box-shadow: 0 4px 12px rgba(2, 119, 252, 0.35);
+    box-shadow: var(--el-box-shadow);
   }
 }
 
@@ -853,7 +853,7 @@ onBeforeUnmount(() => {
       transition: all 0.3s;
 
       &:hover {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--el-box-shadow-light);
         transform: translateY(-2px);
       }
     }

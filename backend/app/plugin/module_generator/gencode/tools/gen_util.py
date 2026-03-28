@@ -44,7 +44,7 @@ class GenUtils:
         """
         data_type = cls.get_db_type(column.column_type or "")
         column_name = column.column_name or ""
-        if not table.id:
+        if table.id is None:
             raise ValueError("业务表ID不能为空")
         column.table_id = table.id
         column.python_field = cls.to_camel_case(column_name)

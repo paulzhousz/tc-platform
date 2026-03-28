@@ -70,7 +70,9 @@ import {
   ElIcon,
 } from "element-plus";
 import { Close } from "@element-plus/icons-vue";
-import NodeAPI, { type NodeType } from "@/api/module_task/node";
+import WorkflowNodeTypeAPI, {
+  type WorkflowNodeTypeOption,
+} from "@/api/module_task/workflow/node-type";
 
 const props = defineProps({
   node: {
@@ -81,7 +83,7 @@ const props = defineProps({
 
 const emit = defineEmits(["close", "save", "delete"]);
 
-const nodeTypes = ref<NodeType[]>([]);
+const nodeTypes = ref<WorkflowNodeTypeOption[]>([]);
 
 const formData = ref({
   type: props.node?.type || "",
@@ -93,7 +95,7 @@ const formData = ref({
 
 const loadNodeTypes = async () => {
   try {
-    const res = await NodeAPI.getNodeTypeOptions();
+    const res = await WorkflowNodeTypeAPI.getWorkflowNodeTypeOptions();
     if (res.data) {
       nodeTypes.value = res.data.data || [];
     }

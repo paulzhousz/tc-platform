@@ -20,6 +20,12 @@ class GenDBTableSchema(BaseModel):
     table_comment: str | None = Field(default=None, description="表描述")
 
 
+class GenCreateTableSqlBody(BaseModel):
+    """从代码生成页提交的建表 SQL（JSON 对象，便于与前端 axios 一致）。"""
+
+    sql: str = Field(..., description="CREATE TABLE 等 DDL，可多条语句")
+
+
 class GenTableColumnSchema(BaseModel):
     """代码生成业务表字段创建模型（原始字段+生成配置）。
     - 从根本上解决问题：所有字段都设置了合理的默认值，避免None值问题
@@ -98,6 +104,15 @@ class GenTableSchema(BaseModel):
             raise ValueError("表名称不能为空")
         return v
 
+    @field_validator("sub_table_name", "sub_table_fk_name", mode="before")
+    @classmethod
+    def strip_optional_sub_fields(cls, v: str | None) -> str | None:
+        """主子表字段去首尾空格，空串视为未填。"""
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
+
 
 class GenTableOutSchema(GenTableSchema, BaseSchema):
     """业务表输出模型（面向控制器/前端）。"""
@@ -107,6 +122,10 @@ class GenTableOutSchema(GenTableSchema, BaseSchema):
     pk_column: GenTableColumnOutSchema | None = Field(default=None, description="主键信息")
     sub_table: GenTableSchema | None = Field(default=None, description="子表信息")
     sub: bool | None = Field(default=None, description="是否为子表")
+    master_sub_hint: str | None = Field(
+        default=None,
+        description="主子表配置说明或异常提示（仅接口输出，不落库）",
+    )
 
 
 @dataclass

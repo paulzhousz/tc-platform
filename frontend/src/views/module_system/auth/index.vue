@@ -185,7 +185,7 @@ onBeforeUnmount(() => {
   height: 100%;
   padding: clamp(1rem, 3vw, 2rem);
   overflow: hidden;
-  background-color: #f5f7ff;
+  background-color: var(--el-bg-color-page);
 
   &::before {
     position: fixed;
@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
     z-index: -1;
     pointer-events: none;
     content: "";
-    background: linear-gradient(120deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+    background: linear-gradient(120deg, var(--el-bg-color), transparent);
   }
 }
 
@@ -210,16 +210,16 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
   align-self: flex-end;
   padding: 0.5rem 0.75rem;
-  background-color: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(22, 93, 255, 0.15);
+  background-color: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
   border-radius: 999px;
-  box-shadow: 0 10px 30px rgba(22, 93, 255, 0.12);
+  box-shadow: var(--el-box-shadow-light);
   transition:
     transform 0.3s ease,
     box-shadow 0.3s ease;
 
   &:hover {
-    box-shadow: 0 16px 40px rgba(22, 93, 255, 0.18);
+    box-shadow: var(--el-box-shadow);
     transform: translateY(-2px);
   }
 
@@ -232,20 +232,10 @@ onBeforeUnmount(() => {
     justify-content: center;
   }
 
-  @media (prefers-color-scheme: dark) {
-    background-color: rgba(255, 255, 255, 0.6);
-    border-color: rgba(64, 128, 255, 0.3);
-  }
+  // 暗色/亮色交给 Element Plus 变量处理，不在页面里写死颜色分支
 }
 
-/* 应用内暗黑主题下顶部设置面板的深色样式 */
-.dark .auth-view__toolbar {
-  background-color: rgba(24, 28, 43, 0.9);
-  border-color: rgba(64, 128, 255, 0.35);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(90, 140, 255, 0.25) inset;
-}
+/* 暗色样式交给全局主题变量 */
 
 .auth-view__wrapper {
   display: grid;
@@ -278,9 +268,7 @@ onBeforeUnmount(() => {
   .auth-panel {
     width: 100%;
     margin-inline: 0;
-    box-shadow:
-      0 12px 32px rgba(22, 93, 255, 0.18),
-      0 2px 8px rgba(22, 93, 255, 0.12);
+    box-shadow: var(--el-box-shadow);
   }
 }
 
@@ -294,7 +282,7 @@ onBeforeUnmount(() => {
   color: var(--el-color-primary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  background: rgba(22, 93, 255, 0.1);
+  background: var(--el-color-primary-light-9);
   border-radius: 999px;
 }
 
@@ -303,7 +291,7 @@ onBeforeUnmount(() => {
   height: 0.5rem;
   background: var(--el-color-primary);
   border-radius: 50%;
-  box-shadow: 0 0 12px rgba(22, 93, 255, 0.7);
+  box-shadow: var(--el-box-shadow-light);
 }
 
 .auth-feature__title {
@@ -334,23 +322,17 @@ onBeforeUnmount(() => {
     padding: 0.75rem 1rem;
     font-weight: 500;
     color: var(--el-text-color-primary);
-    background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(64, 128, 255, 0.08);
+    background: var(--el-bg-color-overlay);
+    border: 1px solid var(--el-border-color-lighter);
     border-radius: 12px;
     backdrop-filter: blur(6px);
 
     span {
       font-size: 0.75rem;
       line-height: 1.6;
-      color: rgba(22, 93, 255, 0.8);
+      color: var(--el-color-primary);
     }
   }
-}
-
-.dark .auth-feature__highlights li {
-  color: rgba(230, 236, 255, 0.85);
-  background: rgba(26, 32, 48, 0.9);
-  border-color: rgba(22, 93, 255, 0.1);
 }
 
 .auth-panel {
@@ -362,25 +344,12 @@ onBeforeUnmount(() => {
   width: min(520px, 100%);
   padding: clamp(2rem, 3vw, 2.75rem);
   margin-inline: auto;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(22, 93, 255, 0.1);
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
   border-radius: 24px;
-  box-shadow:
-    0 16px 48px rgba(22, 93, 255, 0.12),
-    0 4px 16px rgba(22, 93, 255, 0.08),
-    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  box-shadow: var(--el-box-shadow);
   backdrop-filter: blur(20px);
   animation: panelLift 0.7s ease;
-}
-
-/* 应用内暗黑主题（例如 html/body 上挂 .dark 类）下的登录表单样式 */
-.dark .auth-panel {
-  background: rgba(26, 32, 48, 0.9);
-  border-color: rgba(86, 140, 255, 0.28);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.58),
-    0 4px 16px rgba(0, 0, 0, 0.36),
-    0 0 0 1px rgba(110, 150, 255, 0.16) inset;
 }
 
 .auth-panel__brand {
@@ -390,11 +359,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   padding-bottom: 0.85rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid rgba(22, 93, 255, 0.06);
-
-  @media (prefers-color-scheme: dark) {
-    border-color: rgba(64, 128, 255, 0.12);
-  }
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .auth-panel__logo-wrap {
@@ -403,18 +368,9 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 52px;
   height: 52px;
-  background: radial-gradient(circle at 30% 20%, #ffffff, #e6efff);
+  background: var(--el-fill-color-light);
   border-radius: 18px;
-  box-shadow:
-    0 8px 20px rgba(22, 93, 255, 0.16),
-    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
-
-  @media (prefers-color-scheme: dark) {
-    background: radial-gradient(circle at 30% 20%, #1f2438, #141827);
-    box-shadow:
-      0 8px 20px rgba(0, 0, 0, 0.7),
-      0 0 0 1px rgba(90, 140, 255, 0.3) inset;
-  }
+  box-shadow: var(--el-box-shadow-light);
 }
 
 .auth-panel__logo {
@@ -464,8 +420,8 @@ onBeforeUnmount(() => {
   padding: 0.1rem 0.55rem;
   font-weight: 500;
   color: var(--el-color-primary);
-  background: linear-gradient(135deg, rgba(22, 93, 255, 0.12), rgba(64, 150, 255, 0.18));
-  border: 1px solid rgba(22, 93, 255, 0.18);
+  background: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 999px;
 }
 
@@ -502,7 +458,7 @@ onBeforeUnmount(() => {
   margin-top: 0.125rem;
   font-size: 0.875rem;
   text-align: center;
-  border-top: 1px solid rgba(22, 93, 255, 0.06);
+  border-top: 1px solid var(--el-border-color-lighter);
 
   a {
     margin-left: 0.1rem;
@@ -511,19 +467,7 @@ onBeforeUnmount(() => {
     transition: color 0.2s ease;
 
     &:hover {
-      color: rgba(22, 93, 255, 1);
-    }
-  }
-
-  @media (prefers-color-scheme: dark) {
-    border-color: rgba(64, 128, 255, 0.12);
-
-    a {
-      color: rgba(140, 170, 255, 0.88);
-
-      &:hover {
-        color: rgba(160, 190, 255, 1);
-      }
+      color: var(--el-color-primary);
     }
   }
 }

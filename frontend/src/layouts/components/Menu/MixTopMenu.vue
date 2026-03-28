@@ -3,8 +3,21 @@
   <el-menu
     mode="horizontal"
     :default-active="activeTopMenuPath"
-    text-color="var(--layout-menu-text)"
-    active-text-color="var(--layout-menu-active-text)"
+    :background-color="
+      theme === 'dark' || sidebarColorScheme === SidebarColor.CLASSIC_BLUE
+        ? variables['menu-background']
+        : undefined
+    "
+    :text-color="
+      theme === 'dark' || sidebarColorScheme === SidebarColor.CLASSIC_BLUE
+        ? variables['menu-text']
+        : undefined
+    "
+    :active-text-color="
+      theme === 'dark' || sidebarColorScheme === SidebarColor.CLASSIC_BLUE
+        ? variables['menu-active-text']
+        : undefined
+    "
     @select="handleTopMenuSelect"
   >
     <el-menu-item v-for="item in topMenuItems" :key="item.path" :index="item.path">
@@ -21,19 +34,25 @@ defineOptions({
 });
 
 import { LocationQueryRaw, RouteRecordRaw } from "vue-router";
-import { usePermissionStore, useAppStore } from "@/store";
+import { usePermissionStore, useAppStore, useSettingsStore } from "@/store";
+import variables from "@/styles/variables.module.scss";
+import { SidebarColor } from "@/enums/settings/theme.enum";
 
 const router = useRouter();
-const route = useRoute();
 const appStore = useAppStore();
 const permissionStore = usePermissionStore();
+const settingsStore = useSettingsStore();
 
-// 顶部菜单列表
-const topMenus = ref<RouteRecordRaw[]>([]);
+// 获取主题
+const theme = computed(() => settingsStore.theme);
+
+// 获取浅色主题下的侧边栏配色方案
+const sidebarColorScheme = computed(() => settingsStore.sidebarColorScheme);
 
 // 处理后的顶部菜单列表 - 智能显示唯一子菜单的标题
 const topMenuItems = computed(() => {
-  return topMenus.value.map((route) => {
+  const topMenus = permissionStore.routes.filter((item) => !item.meta || !item.meta.hidden);
+  return topMenus.map((route) => {
     // 如果路由设置了 alwaysShow=true，或者没有子菜单，直接返回原路由
     if (route.meta?.alwaysShow || !route.children || route.children.length === 0) {
       return route;
@@ -74,14 +93,22 @@ const handleTopMenuSelect = (routePath: string) => {
  * @param skipNavigation 是否跳过导航（路由变化时为true，点击菜单时为false）
  */
 const updateMenuState = (topMenuPath: string, skipNavigation = false) => {
-  // 确保路径有效且不相同才更新，避免重复操作
-  if (topMenuPath && appStore.activeTopMenuPath) {
-    appStore.activeTopMenu(topMenuPath); // 设置激活的顶部菜单
-    permissionStore.setMixLayoutSideMenus(topMenuPath); // 只有当路由映射表中存在该路径时才更新侧边菜单。 设置混合布局左侧菜单
+  let hasStateChanged = false;
+
+  // 确保路径有效才更新
+  if (topMenuPath) {
+    // 顶部激活路径
+    if (appStore.activeTopMenuPath !== topMenuPath) {
+      appStore.activeTopMenu(topMenuPath);
+      hasStateChanged = true;
+    }
+
+    // 混合布局左侧菜单跟随顶部菜单
+    permissionStore.setMixLayoutSideMenus(topMenuPath);
   }
 
-  // 如果是点击菜单且状态已变更，才进行导航
-  if (!skipNavigation) {
+  // 仅在点击顶部菜单且状态发生变化时，才跳转到左侧第一个菜单
+  if (!skipNavigation && hasStateChanged) {
     navigateToFirstLeftMenu(permissionStore.mixLayoutSideMenus); // 跳转到左侧第一个菜单
   }
 };
@@ -112,30 +139,21 @@ const navigateToFirstLeftMenu = (menus: RouteRecordRaw[]) => {
 // 获取当前路由路径的顶部菜单路径
 const activeTopMenuPath = computed(() => appStore.activeTopMenuPath);
 
-onMounted(() => {
-  topMenus.value = permissionStore.routes.filter((item) => !item.meta || !item.meta.hidden);
-  // 初始化顶部菜单
-  const currentTopMenuPath = getTopMenuPath(route.path);
-  appStore.activeTopMenu(currentTopMenuPath); // 设置激活的顶部菜单
-  permissionStore.setMixLayoutSideMenus(currentTopMenuPath); // 设置混合布局左侧菜单
-});
-
 // 监听路由变化，同步更新顶部菜单和左侧菜单的激活状态
 watch(
   () => router.currentRoute.value.path,
   (newPath) => {
     if (newPath) {
-      const topMenuPath = getTopMenuPath(newPath);
+      // 提取顶级路径
+      const topMenuPath =
+        newPath.split("/").filter(Boolean).length > 1 ? newPath.match(/^\/[^/]+/)?.[0] || "/" : "/";
 
       // 使用公共方法更新菜单状态，但跳过导航（因为路由已经变化）
       updateMenuState(topMenuPath, true);
     }
-  }
+  },
+  { immediate: true }
 );
-
-function getTopMenuPath(path: string): string {
-  return path.split("/").filter(Boolean).length > 1 ? path.match(/^\/[^/]+/)?.[0] || "/" : "/";
-}
 </script>
 
 <style lang="scss" scoped>

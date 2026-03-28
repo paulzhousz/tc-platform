@@ -1,116 +1,23 @@
 <!-- 日志管理 -->
 <template>
   <div class="app-container">
-    <!-- 内容区域 -->
-    <el-card class="data-table">
-      <template #header>
-        <div class="card-header">
-          <span>
-            <el-tooltip content="日志管理维护系统的日志。">
-              <QuestionFilled class="w-4 h-4 mx-1" />
-            </el-tooltip>
-            日志列表
-          </span>
-        </div>
-        <!-- 搜索区域 -->
-        <div class="search-container">
-          <el-form
-            ref="queryFormRef"
-            :model="queryFormData"
-            :inline="true"
-            label-suffix=":"
-            @submit.prevent="handleQuery"
-          >
-            <el-form-item prop="request_path" label="请求路径">
-              <el-input
-                v-model="queryFormData.request_path"
-                placeholder="请输入请求路径"
-                clearable
-              />
-            </el-form-item>
-            <el-form-item prop="type" label="日志类型">
-              <el-select
-                v-model="queryFormData.type"
-                placeholder="请选择日志类型"
-                style="width: 167.5px"
-                clearable
-              >
-                <el-option label="登录日志" value="1" />
-                <el-option label="操作日志" value="2" />
-              </el-select>
-            </el-form-item>
-            <el-form-item v-if="isExpand" prop="created_id" label="创建人">
-              <UserTableSelect
-                v-model="queryFormData.created_id"
-                @confirm-click="handleConfirm"
-                @clear-click="handleQuery"
-              />
-            </el-form-item>
-            <!-- 时间范围，收起状态下隐藏 -->
-            <el-form-item v-if="isExpand" prop="start_time" label="创建时间">
-              <DatePicker v-model="dateRange" @update:model-value="handleDateRangeChange" />
-            </el-form-item>
-            <!-- 查询、重置、展开/收起按钮 -->
-            <el-form-item class="search-buttons">
-              <el-button
-                v-hasPerm="['module_system:log:query']"
-                type="primary"
-                icon="search"
-                native-type="submit"
-              >
-                查询
-              </el-button>
-              <el-button
-                v-hasPerm="['module_system:log:query']"
-                icon="refresh"
-                @click="handleResetQuery"
-              >
-                重置
-              </el-button>
-              <!-- 展开/收起 -->
-              <template v-if="isExpandable">
-                <el-link
-                  class="ml-3"
-                  type="primary"
-                  underline="never"
-                  @click="isExpand = !isExpand"
-                >
-                  {{ isExpand ? "收起" : "展开" }}
-                  <el-icon>
-                    <template v-if="isExpand">
-                      <ArrowUp />
-                    </template>
-                    <template v-else>
-                      <ArrowDown />
-                    </template>
-                  </el-icon>
-                </el-link>
-              </template>
-            </el-form-item>
-          </el-form>
-        </div>
-      </template>
+    <PageSearch
+      ref="searchRef"
+      :search-config="searchConfig"
+      @query-click="handleQueryClick"
+      @reset-click="handleResetClick"
+    />
 
-      <!-- 功能区域 -->
-      <div class="data-table__toolbar">
-        <div class="data-table__toolbar--left">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_system:log:delete']"
-                type="danger"
-                icon="delete"
-                :disabled="selectIds.length === 0"
-                @click="handleDelete(selectIds)"
-              >
-                批量删除
-              </el-button>
-            </el-col>
-          </el-row>
-        </div>
+    <PageContent ref="contentRef" :content-config="contentConfig">
+      <template #toolbar="{ toolbarRight, onToolbar, removeIds, cols }">
+        <CrudToolbarLeft
+          :remove-ids="removeIds"
+          :perm-delete="['module_system:log:delete']"
+          @delete="onToolbar('delete')"
+        />
         <div class="data-table__toolbar--right">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
+          <CrudToolbarRight :buttons="toolbarRight" :cols="cols" :on-toolbar="onToolbar">
+            <template #prepend>
               <el-tooltip content="导出">
                 <el-button
                   v-hasPerm="['module_system:log:export']"
@@ -120,145 +27,194 @@
                   @click="handleOpenExportsModal"
                 />
               </el-tooltip>
-            </el-col>
-            <el-col :span="1.5">
-              <el-tooltip content="刷新">
-                <el-button
-                  v-hasPerm="['module_system:log:query']"
-                  type="default"
-                  icon="refresh"
-                  circle
-                  @click="handleRefresh"
-                />
-              </el-tooltip>
-            </el-col>
-          </el-row>
+            </template>
+          </CrudToolbarRight>
         </div>
-      </div>
-
-      <!-- 表格区域：系统配置列表 -->
-      <div class="data-table__content">
-        <el-table
-          ref="dataTableRef"
-          v-loading="loading"
-          :data="pageTableData"
-          height="calc(100vh - 440px)"
-          max-height="calc(100vh - 440px)"
-          border
-          stripe
-          @selection-change="handleSelectionChange"
-        >
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column prop="selection" type="selection" min-width="55" align="center" />
-          <el-table-column type="index" fixed label="序号" min-width="60">
-            <template #default="scope">
-              {{ (queryFormData.page_no - 1) * queryFormData.page_size + scope.$index + 1 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="日志类型" prop="type" min-width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.type === 1 ? 'success' : 'primary'">
-                {{ scope.row.type === 1 ? "登录日志" : "操作日志" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            label="请求路径"
-            prop="request_path"
-            min-width="200"
-            show-overflow-tooltip
-          />
-          <el-table-column label="请求方法" prop="request_method" min-width="100">
-            <template #default="scope">
-              <el-tag :type="getMethodType(scope.row.request_method)">
-                {{ scope.row.request_method }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态码" prop="response_code" min-width="100">
-            <template #default="scope">
-              <el-tag :type="getStatusCodeType(scope.row.response_code)">
-                {{ scope.row.response_code }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="请求IP" prop="request_ip" min-width="180" show-overflow-tooltip>
-            <template #default="scope">
-              <el-text>{{ scope.row.request_ip }}</el-text>
-              <CopyButton
-                v-if="scope.row.request_ip"
-                :text="scope.row.request_ip"
-                :style="{ marginLeft: '2px' }"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="处理时间" prop="process_time" min-width="120" />
-          <el-table-column
-            label="浏览器"
-            prop="request_browser"
-            min-width="220"
-            show-overflow-tooltip
-          />
-          <el-table-column label="系统" prop="request_os" min-width="100" />
-          <el-table-column label="描述" prop="description" min-width="120" show-overflow-tooltip />
-          <el-table-column label="创建时间" prop="created_time" min-width="200" sortable />
-          <el-table-column label="创建人" prop="created_id" min-width="120">
-            <template #default="scope">
-              {{ scope.row.created_by?.name }}
-            </template>
-          </el-table-column>
-          <el-table-column label="更新人" prop="updated_id" min-width="120">
-            <template #default="scope">
-              {{ scope.row.updated_by?.name }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" fixed="right" align="center" min-width="150">
-            <template #default="scope">
-              <el-button
-                v-hasPerm="['module_system:log:detail']"
-                type="info"
-                size="small"
-                link
-                icon="document"
-                @click="handleOpenDialog('detail', scope.row.id)"
-              >
-                详情
-              </el-button>
-              <el-button
-                v-hasPerm="['module_system:log:delete']"
-                type="danger"
-                size="small"
-                link
-                icon="delete"
-                @click="handleDelete([scope.row.id])"
-              >
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <!-- 分页区域 -->
-      <template #footer>
-        <pagination
-          v-model:total="total"
-          v-model:page="queryFormData.page_no"
-          v-model:limit="queryFormData.page_size"
-          @pagination="loadingData"
-        />
       </template>
-    </el-card>
 
-    <!-- 弹窗区域 -->
-    <el-dialog
+      <template #table="{ data, loading, tableRef, onSelectionChange, pagination }">
+        <div class="data-table__content">
+          <el-table
+            :ref="tableRef as any"
+            v-loading="loading"
+            row-key="id"
+            :data="data"
+            height="100%"
+            border
+            stripe
+            @selection-change="onSelectionChange"
+          >
+            <template #empty>
+              <el-empty :image-size="80" description="暂无数据" />
+            </template>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'selection')?.show"
+              type="selection"
+              min-width="55"
+              align="center"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'index')?.show"
+              fixed
+              label="序号"
+              min-width="60"
+            >
+              <template #default="scope">
+                {{ (pagination.currentPage - 1) * pagination.pageSize + scope.$index + 1 }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'type')?.show"
+              label="日志类型"
+              prop="type"
+              min-width="100"
+            >
+              <template #default="scope">
+                <el-tag :type="scope.row.type === 1 ? 'success' : 'primary'">
+                  {{ scope.row.type === 1 ? "登录日志" : "操作日志" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'request_path')?.show"
+              label="请求路径"
+              prop="request_path"
+              min-width="200"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'request_method')?.show"
+              label="请求方法"
+              prop="request_method"
+              min-width="100"
+            >
+              <template #default="scope">
+                <el-tag :type="getMethodType(scope.row.request_method)">
+                  {{ scope.row.request_method }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'response_code')?.show"
+              label="状态码"
+              prop="response_code"
+              min-width="100"
+            >
+              <template #default="scope">
+                <el-tag :type="getStatusCodeType(scope.row.response_code)">
+                  {{ scope.row.response_code }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'request_ip')?.show"
+              label="请求IP"
+              prop="request_ip"
+              min-width="180"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <el-text>{{ scope.row.request_ip }}</el-text>
+                <CopyButton
+                  v-if="scope.row.request_ip"
+                  :text="scope.row.request_ip"
+                  :style="{ marginLeft: '2px' }"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'process_time')?.show"
+              label="处理时间"
+              prop="process_time"
+              min-width="120"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'request_browser')?.show"
+              label="浏览器"
+              prop="request_browser"
+              min-width="220"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'request_os')?.show"
+              label="系统"
+              prop="request_os"
+              min-width="100"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'description')?.show"
+              label="描述"
+              prop="description"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'created_time')?.show"
+              label="创建时间"
+              prop="created_time"
+              min-width="200"
+              sortable
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'created_id')?.show"
+              label="创建人"
+              prop="created_id"
+              min-width="120"
+            >
+              <template #default="scope">
+                {{ scope.row.created_by?.name }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'updated_id')?.show"
+              label="更新人"
+              prop="updated_id"
+              min-width="120"
+            >
+              <template #default="scope">
+                {{ scope.row.updated_by?.name }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'operation')?.show"
+              fixed="right"
+              label="操作"
+              align="center"
+              min-width="150"
+            >
+              <template #default="scope">
+                <el-button
+                  v-hasPerm="['module_system:log:detail']"
+                  type="info"
+                  size="small"
+                  link
+                  icon="View"
+                  @click="handleOpenDialog('detail', scope.row.id)"
+                >
+                  详情
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_system:log:delete']"
+                  type="danger"
+                  size="small"
+                  link
+                  icon="delete"
+                  @click="handleRowDelete(scope.row.id)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
+    </PageContent>
+
+    <EnhancedDialog
       v-model="dialogVisible.visible"
       :title="dialogVisible.title"
       @close="handleCloseDialog"
     >
-      <!-- 详情 -->
       <template v-if="dialogVisible.type === 'detail'">
         <el-descriptions :column="8" border label-width="200px">
           <el-descriptions-item label="日志类型" :span="2">
@@ -320,7 +276,6 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <!-- 详情弹窗不需要确定按钮的提交逻辑 -->
           <el-button @click="handleCloseDialog">取消</el-button>
           <el-button
             v-hasPerm="['module_system:log:detail']"
@@ -331,15 +286,14 @@
           </el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
 
-    <!-- 导出弹窗 -->
     <ExportModal
       v-model="exportsDialogVisible"
       :content-config="curdContentConfig"
-      :query-params="queryFormData"
-      :page-data="pageTableData"
-      :selection-data="selectionRows"
+      :query-params="exportQueryParams"
+      :page-data="exportPageData"
+      :selection-data="exportSelectionData"
     />
   </div>
 </template>
@@ -350,67 +304,144 @@ defineOptions({
   inheritAttrs: false,
 });
 
+import { ref, reactive, computed, unref, markRaw, nextTick } from "vue";
+import { fetchAllPages } from "@/utils/fetchAllPages";
 import LogAPI, { LogTable, LogPageQuery } from "@/api/module_system/log";
 import UserTableSelect from "@/views/module_system/user/components/UserTableSelect.vue";
 import ExportModal from "@/components/CURD/ExportModal.vue";
+import CrudToolbarLeft from "@/components/CURD/CrudToolbarLeft.vue";
+import CrudToolbarRight from "@/components/CURD/CrudToolbarRight.vue";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDialog from "@/components/CURD/EnhancedDialog.vue";
 import JsonPretty from "@/components/JsonPretty/index.vue";
-import type { IContentConfig } from "@/components/CURD/types";
-import { formatToDateTime } from "@/utils/dateUtil";
+import { useCrudList } from "@/components/CURD/useCrudList";
+import type { IContentConfig, ISearchConfig } from "@/components/CURD/types";
 
-const queryFormRef = ref();
-const dataFormRef = ref();
-const total = ref(0);
-const selectIds = ref<number[]>([]);
-const loading = ref(false);
-const isExpand = ref(false);
-const isExpandable = ref(true);
+const { searchRef, contentRef, handleQueryClick, handleResetClick, refreshList } = useCrudList();
 
-// 分页表单
-const pageTableData = ref<LogTable[]>([]);
+function triggerUserSearch() {
+  nextTick(() => refreshList());
+}
 
-// 导出弹窗状态和选中行数据
-const exportsDialogVisible = ref(false);
-const selectionRows = ref<LogTable[]>([]);
-
-// 详情表单
-const formData = ref<LogTable>({});
-
-// 分页查询参数
-const queryFormData = reactive<LogPageQuery>({
-  page_no: 1,
-  page_size: 10,
-  type: undefined,
-  request_path: undefined,
-  creator_name: undefined,
-  created_time: undefined,
-  created_id: undefined,
-  updated_id: undefined,
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_system:log",
+  colon: true,
+  isExpandable: true,
+  showNumber: 2,
+  form: { labelWidth: "auto" },
+  formItems: [
+    {
+      prop: "request_path",
+      label: "请求路径",
+      type: "input",
+      attrs: { placeholder: "请输入请求路径", clearable: true },
+    },
+    {
+      prop: "type",
+      label: "日志类型",
+      type: "select",
+      options: [
+        { label: "登录日志", value: 1 },
+        { label: "操作日志", value: 2 },
+      ],
+      attrs: { placeholder: "请选择日志类型", clearable: true, style: { width: "167.5px" } },
+    },
+    {
+      prop: "created_id",
+      label: "创建人",
+      type: "user-table-select",
+      initialValue: null,
+      events: {
+        "confirm-click": triggerUserSearch,
+        "clear-click": triggerUserSearch,
+      },
+    },
+    {
+      prop: "created_time",
+      label: "创建时间",
+      type: "date-picker",
+      initialValue: [],
+      attrs: {
+        type: "datetimerange",
+        valueFormat: "YYYY-MM-DD HH:mm:ss",
+        rangeSeparator: "至",
+        startPlaceholder: "开始日期",
+        endPlaceholder: "结束日期",
+        style: { width: "340px" },
+      },
+    },
+  ],
+  customComponents: {
+    "user-table-select": markRaw(UserTableSelect),
+  },
 });
 
-// 弹窗状态
+const contentCols = reactive<
+  Array<{
+    prop?: string;
+    label?: string;
+    show?: boolean;
+  }>
+>([
+  { prop: "selection", label: "选择框", show: true },
+  { prop: "index", label: "序号", show: true },
+  { prop: "type", label: "日志类型", show: true },
+  { prop: "request_path", label: "请求路径", show: true },
+  { prop: "request_method", label: "请求方法", show: true },
+  { prop: "response_code", label: "状态码", show: true },
+  { prop: "request_ip", label: "请求IP", show: true },
+  { prop: "process_time", label: "处理时间", show: true },
+  { prop: "request_browser", label: "浏览器", show: true },
+  { prop: "request_os", label: "系统", show: true },
+  { prop: "description", label: "描述", show: true },
+  { prop: "created_time", label: "创建时间", show: true },
+  { prop: "created_id", label: "创建人", show: true },
+  { prop: "updated_id", label: "更新人", show: true },
+  { prop: "operation", label: "操作", show: true },
+]);
+
+const contentConfig = reactive<IContentConfig<LogPageQuery>>({
+  permPrefix: "module_system:log",
+  pk: "id",
+  cols: contentCols as IContentConfig["cols"],
+  hideColumnFilter: false,
+  toolbar: [],
+  defaultToolbar: ["refresh", "filter"],
+  pagination: {
+    pageSize: 10,
+    pageSizes: [10, 20, 30, 50],
+  },
+  request: { page_no: "page_no", page_size: "page_size" },
+  indexAction: async (params) => {
+    const res = await LogAPI.listLog(params as LogPageQuery);
+    return {
+      total: res.data.data.total,
+      list: res.data.data.items,
+    };
+  },
+  deleteAction: async (ids) => {
+    await LogAPI.deleteLog(
+      ids
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n))
+    );
+  },
+  deleteConfirm: {
+    title: "警告",
+    message: "确认删除该项数据?",
+    type: "warning",
+  },
+});
+
+const formData = ref<LogTable>({});
+
 const dialogVisible = reactive({
   title: "",
   visible: false,
   type: "create" as "create" | "update" | "detail",
 });
-
-// 日期范围临时变量
-const dateRange = ref<[Date, Date] | []>([]);
-
-// 处理日期范围变化
-function handleDateRangeChange(range: [Date, Date]) {
-  dateRange.value = range;
-  if (range && range.length === 2) {
-    queryFormData.created_time = [formatToDateTime(range[0]), formatToDateTime(range[1])];
-  } else {
-    queryFormData.created_time = undefined;
-  }
-}
-
-// 列表刷新
-async function handleRefresh() {
-  await loadingData();
-}
 
 const getStatusCodeType = (code?: number) => {
   if (code === undefined) {
@@ -444,63 +475,15 @@ const getMethodType = (method?: string) => {
   }
 };
 
-// 加载表格数据
-async function loadingData() {
-  loading.value = true;
-  try {
-    const response = await LogAPI.listLog(queryFormData);
-    pageTableData.value = response.data.data.items;
-    total.value = response.data.data.total;
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-// 查询（重置页码后获取数据）
-async function handleQuery() {
-  queryFormData.page_no = 1;
-  loadingData();
-}
-
-// 选择创建人后触发查询
-function handleConfirm() {
-  handleQuery();
-}
-
-// 重置查询
-async function handleResetQuery() {
-  queryFormRef.value.resetFields();
-  queryFormData.page_no = 1;
-  // 额外清空日期范围与时间查询参数
-  dateRange.value = [];
-  queryFormData.created_time = undefined;
-  loadingData();
-}
-
-// 重置表单
 async function resetForm() {
-  if (dataFormRef.value) {
-    dataFormRef.value.resetFields();
-    dataFormRef.value.clearValidate();
-  }
   formData.value.id = undefined;
 }
 
-// 行复选框选中项变化
-async function handleSelectionChange(selection: any) {
-  selectIds.value = selection.map((item: any) => item.id);
-  selectionRows.value = selection;
-}
-
-// 关闭弹窗
 async function handleCloseDialog() {
   dialogVisible.visible = false;
-  resetForm();
+  await resetForm();
 }
 
-// 打开日志详情弹窗
 async function handleOpenDialog(type: "create" | "update" | "detail", id: number) {
   dialogVisible.type = type;
   if (id) {
@@ -513,35 +496,23 @@ async function handleOpenDialog(type: "create" | "update" | "detail", id: number
   dialogVisible.visible = true;
 }
 
-// 删除、批量删除
-async function handleDelete(ids: number[]) {
-  ElMessageBox.confirm("确认删除该项数据?", "警告", {
-    confirmButtonText: "确定",
-    cancelButtonText: "取消",
-    type: "warning",
-  })
-    .then(async () => {
-      try {
-        loading.value = true;
-        await LogAPI.deleteLog(ids);
-        handleResetQuery();
-      } catch (error: any) {
-        console.error(error);
-      } finally {
-        loading.value = false;
-      }
-    })
-    .catch(() => {
-      ElMessageBox.close();
-    });
+function handleRowDelete(id: number) {
+  contentRef.value?.handleDelete(id);
 }
 
-// 打开导出弹窗
-function handleOpenExportsModal() {
-  exportsDialogVisible.value = true;
-}
+const exportsDialogVisible = ref(false);
 
-// 导出字段
+const exportQueryParams = computed(() => searchRef.value?.getQueryParams() ?? {});
+
+const exportPageData = computed(() => {
+  const pd = contentRef.value?.pageData;
+  return (unref(pd) ?? []) as LogTable[];
+});
+
+const exportSelectionData = computed(
+  () => (contentRef.value?.getSelectionData() ?? []) as LogTable[]
+);
+
 const exportColumns = [
   { prop: "type", label: "日志类型" },
   { prop: "request_path", label: "请求路径" },
@@ -557,30 +528,27 @@ const exportColumns = [
   { prop: "updated_time", label: "更新时间" },
 ];
 
-// 导入/导出配置（用于导出弹窗）
 const curdContentConfig = {
   permPrefix: "module_system:log",
   cols: exportColumns as any,
   exportsAction: async (params: any) => {
-    const query: any = { ...params };
-    query.page_no = 1;
-    query.page_size = 1000;
-    const all: any[] = [];
-    while (true) {
-      const res = await LogAPI.listLog(query);
-      const items = res.data?.data?.items || [];
-      const total = res.data?.data?.total || 0;
-      all.push(...items);
-      if (all.length >= total || items.length === 0) break;
-      query.page_no += 1;
-    }
-    return all;
+    const query: Record<string, unknown> = { ...params };
+    return fetchAllPages({
+      initialQuery: query,
+      fetchPage: async (q) => {
+        const res = await LogAPI.listLog(q as unknown as LogPageQuery);
+        return {
+          total: res.data?.data?.total ?? 0,
+          list: res.data?.data?.items ?? [],
+        };
+      },
+    });
   },
 } as unknown as IContentConfig;
 
-onMounted(() => {
-  loadingData();
-});
+function handleOpenExportsModal() {
+  exportsDialogVisible.value = true;
+}
 </script>
 
 <style lang="scss" scoped></style>

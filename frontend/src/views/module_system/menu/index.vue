@@ -1,294 +1,192 @@
 <!-- 菜单管理 -->
 <template>
   <div class="app-container">
-    <!-- 内容区域 -->
-    <el-card class="data-table">
-      <template #header>
-        <div class="card-header">
-          <span>
-            <el-tooltip content="菜单管理系统的菜单和权限。">
-              <QuestionFilled class="w-4 h-4 mx-1" />
-            </el-tooltip>
-            菜单列表
-          </span>
-        </div>
-        <!-- 搜索区域 -->
-        <div class="search-container">
-          <el-form
-            ref="queryFormRef"
-            :model="queryFormData"
-            :inline="true"
-            label-suffix=":"
-            @submit.prevent="handleQuery"
-          >
-            <el-form-item prop="name" label="菜单名称">
-              <el-input v-model="queryFormData.name" placeholder="请输入菜单名称" clearable />
-            </el-form-item>
-            <el-form-item prop="status" label="状态">
-              <el-select
-                v-model="queryFormData.status"
-                placeholder="请选择状态"
-                style="width: 167.5px"
-                clearable
-              >
-                <el-option value="0" label="启用" />
-                <el-option value="1" label="停用" />
-              </el-select>
-            </el-form-item>
-            <!-- 时间范围，收起状态下隐藏 -->
-            <el-form-item v-if="isExpand" prop="start_time" label="创建时间">
-              <DatePicker v-model="dateRange" @update:model-value="handleDateRangeChange" />
-            </el-form-item>
-            <!-- 查询、重置、展开/收起按钮 -->
-            <el-form-item class="search-buttons">
-              <el-button
-                v-hasPerm="['module_system:menu:query']"
-                type="primary"
-                icon="search"
-                native-type="submit"
-              >
-                查询
-              </el-button>
-              <el-button
-                v-hasPerm="['module_system:menu:query']"
-                icon="refresh"
-                @click="handleResetQuery"
-              >
-                重置
-              </el-button>
-              <!-- 展开/收起 -->
-              <template v-if="isExpandable">
-                <el-link
-                  class="ml-3"
-                  type="primary"
-                  underline="never"
-                  @click="isExpand = !isExpand"
-                >
-                  {{ isExpand ? "收起" : "展开" }}
-                  <el-icon>
-                    <template v-if="isExpand">
-                      <ArrowUp />
-                    </template>
-                    <template v-else>
-                      <ArrowDown />
-                    </template>
-                  </el-icon>
-                </el-link>
-              </template>
-            </el-form-item>
-          </el-form>
+    <PageSearch
+      ref="searchRef"
+      :search-config="searchConfig"
+      @query-click="handleQueryClick"
+      @reset-click="handleResetClick"
+    />
+
+    <PageContent ref="contentRef" :content-config="contentConfig">
+      <template #toolbar="{ toolbarRight, onToolbar, removeIds, cols }">
+        <CrudToolbarLeft
+          :remove-ids="removeIds"
+          :perm-create="['module_system:menu:create']"
+          :perm-delete="['module_system:menu:delete']"
+          :perm-patch="['module_system:menu:patch']"
+          @add="handleOpenDialog('create')"
+          @delete="onToolbar('delete')"
+          @more="handleMoreClick"
+        />
+        <div class="data-table__toolbar--right">
+          <CrudToolbarRight :buttons="toolbarRight" :cols="cols" :on-toolbar="onToolbar" />
         </div>
       </template>
 
-      <!-- 功能区域 -->
-      <div class="data-table__toolbar">
-        <div class="data-table__toolbar--left">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_system:menu:create']"
-                type="success"
-                icon="plus"
-                @click="handleOpenDialog('create')"
-              >
-                新增
-              </el-button>
-            </el-col>
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_system:menu:delete']"
-                type="danger"
-                icon="delete"
-                :disabled="selectIds.length === 0"
-                @click="handleDelete(selectIds)"
-              >
-                批量删除
-              </el-button>
-            </el-col>
-            <el-col :span="1.5">
-              <el-dropdown v-hasPerm="['module_system:menu:patch']" trigger="click">
-                <el-button type="default" :disabled="selectIds.length === 0" icon="ArrowDown">
-                  更多
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item icon="Check" @click="handleMoreClick('0')">
-                      批量启用
-                    </el-dropdown-item>
-                    <el-dropdown-item icon="CircleClose" @click="handleMoreClick('1')">
-                      批量停用
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
+      <template #table="{ data, loading, tableRef, onSelectionChange }">
+        <div class="data-table__content">
+          <el-table
+            :ref="tableRef as any"
+            v-loading="loading"
+            row-key="id"
+            :data="data"
+            :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
+            height="100%"
+            border
+            @selection-change="onSelectionChange"
+            @row-click="handleRowClick"
+          >
+            <template #empty>
+              <el-empty :image-size="80" description="暂无数据" />
+            </template>
+            <el-table-column type="selection" min-width="55" align="center" />
+            <el-table-column type="index" fixed label="序号" min-width="60" />
+            <el-table-column label="菜单名称" prop="name" min-width="240" />
+            <el-table-column label="图标" prop="icon" min-width="80" align="center">
+              <template #default="scope">
+                <template v-if="scope.row.icon && scope.row.icon.startsWith('el-icon')">
+                  <el-icon style="vertical-align: -0.15em">
+                    <component :is="scope.row.icon.replace('el-icon-', '')" />
+                  </el-icon>
                 </template>
-              </el-dropdown>
-            </el-col>
-          </el-row>
-        </div>
-        <div class="data-table__toolbar--right">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-tooltip content="刷新">
+                <template v-else-if="scope.row.icon">
+                  <div :class="`i-svg:${scope.row.icon}`" />
+                </template>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" prop="status" min-width="80" align="center">
+              <template #default="scope">
+                <el-tag :type="scope.row.status === '0' ? 'success' : 'danger'">
+                  {{ scope.row.status === "0" ? "启用" : "停用" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="类型" prop="type" min-width="80" align="center">
+              <template #default="scope">
+                <el-tag v-if="scope.row.type === MenuTypeEnum.CATALOG" type="warning">目录</el-tag>
+                <el-tag v-if="scope.row.type === MenuTypeEnum.MENU" type="success">菜单</el-tag>
+                <el-tag v-if="scope.row.type === MenuTypeEnum.BUTTON" type="danger">按钮</el-tag>
+                <el-tag v-if="scope.row.type === MenuTypeEnum.EXTLINK" type="info">外链</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="排序" prop="order" min-width="80" />
+            <el-table-column label="重定向" prop="redirect" min-width="200" />
+            <el-table-column label="是否缓存" prop="keep_alive" min-width="100">
+              <template #default="scope">
+                <el-tag :type="scope.row.keep_alive ? 'success' : 'danger'">
+                  {{ scope.row.keep_alive ? "是" : "否" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="是否隐藏" prop="hidden" min-width="100">
+              <template #default="scope">
+                <el-tag :type="scope.row.hidden ? 'success' : 'danger'">
+                  {{ scope.row.hidden ? "是" : "否" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="显示根路由" prop="always_show" min-width="120">
+              <template #default="scope">
+                <el-tag :type="scope.row.always_show ? 'success' : 'danger'">
+                  {{ scope.row.always_show ? "是" : "否" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="固定路由" prop="affix" min-width="100">
+              <template #default="scope">
+                <el-tag :type="scope.row.affix ? 'success' : 'danger'">
+                  {{ scope.row.affix ? "是" : "否" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="菜单标题" prop="title" min-width="200" />
+            <el-table-column
+              label="权限标识"
+              prop="permission"
+              show-overflow-tooltip
+              min-width="220"
+            />
+            <el-table-column
+              label="路由名称"
+              prop="route_name"
+              show-overflow-toolti
+              min-width="200"
+            />
+            <el-table-column
+              label="路由路径"
+              prop="route_path"
+              show-overflow-tooltip
+              min-width="200"
+            />
+            <el-table-column
+              label="组件路径"
+              prop="component_path"
+              show-overflow-tooltip
+              min-width="200"
+            />
+            <el-table-column label="路由参数" prop="params" min-width="100" />
+            <el-table-column
+              label="描述"
+              prop="description"
+              show-overflow-tooltip
+              min-width="200"
+            />
+            <el-table-column label="创建时间" prop="created_time" min-width="200" sortable />
+            <el-table-column label="更新时间" prop="updated_time" min-width="200" sortable />
+            <el-table-column fixed="right" label="操作" align="center" min-width="260">
+              <template #default="scope">
                 <el-button
-                  v-hasPerm="['module_system:menu:query']"
+                  v-if="
+                    scope.row.type == MenuTypeEnum.CATALOG || scope.row.type == MenuTypeEnum.MENU
+                  "
+                  v-hasPerm="['module_system:menu:create']"
+                  type="success"
+                  link
+                  size="small"
+                  icon="plus"
+                  @click.stop="handleOpenDialog('create', undefined, scope.row.id)"
+                >
+                  新增
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_system:menu:detail']"
+                  type="info"
+                  size="small"
+                  link
+                  icon="View"
+                  @click="handleOpenDialog('detail', scope.row.id)"
+                >
+                  详情
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_system:menu:update']"
                   type="primary"
-                  icon="refresh"
-                  circle
-                  @click="handleRefresh"
-                />
-              </el-tooltip>
-            </el-col>
-          </el-row>
+                  size="small"
+                  link
+                  icon="edit"
+                  @click="handleOpenDialog('update', scope.row.id)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_system:menu:delete']"
+                  type="danger"
+                  size="small"
+                  link
+                  icon="delete"
+                  @click="handleRowDelete(scope.row.id)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
-      </div>
+      </template>
+    </PageContent>
 
-      <!-- 表格区域 -->
-      <div class="data-table__content">
-        <el-table
-          ref="dataTableRef"
-          v-loading="loading"
-          row-key="id"
-          :data="pageTableData"
-          :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
-          height="calc(100vh - 350px)"
-          max-height="calc(100vh - 350px)"
-          border
-          stripe
-          @selection-change="handleSelectionChange"
-          @row-click="handleRowClick"
-        >
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column type="selection" min-width="55" align="center" />
-          <el-table-column type="index" fixed label="序号" min-width="60" />
-          <el-table-column label="菜单名称" prop="name" min-width="240" />
-          <el-table-column label="图标" prop="icon" min-width="80" align="center">
-            <template #default="scope">
-              <template v-if="scope.row.icon && scope.row.icon.startsWith('el-icon')">
-                <el-icon style="vertical-align: -0.15em">
-                  <component :is="scope.row.icon.replace('el-icon-', '')" />
-                </el-icon>
-              </template>
-              <template v-else-if="scope.row.icon">
-                <div :class="`i-svg:${scope.row.icon}`" />
-              </template>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" prop="status" min-width="80" align="center">
-            <template #default="scope">
-              <el-tag :type="scope.row.status === '0' ? 'success' : 'danger'">
-                {{ scope.row.status ? "启用" : "停用" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="类型" prop="type" min-width="80" align="center">
-            <template #default="scope">
-              <el-tag v-if="scope.row.type === MenuTypeEnum.CATALOG" type="warning">目录</el-tag>
-              <el-tag v-if="scope.row.type === MenuTypeEnum.MENU" type="success">菜单</el-tag>
-              <el-tag v-if="scope.row.type === MenuTypeEnum.BUTTON" type="danger">按钮</el-tag>
-              <el-tag v-if="scope.row.type === MenuTypeEnum.EXTLINK" type="info">外链</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="排序" prop="order" min-width="80" />
-          <el-table-column label="重定向" prop="redirect" min-width="200" />
-          <el-table-column label="是否缓存" prop="keep_alive" min-width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.keep_alive ? 'success' : 'danger'">
-                {{ scope.row.keep_alive ? "是" : "否" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="是否隐藏" prop="hidden" min-width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.hidden ? 'success' : 'danger'">
-                {{ scope.row.hidden ? "是" : "否" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="显示根路由" prop="always_show" min-width="120">
-            <template #default="scope">
-              <el-tag :type="scope.row.always_show ? 'success' : 'danger'">
-                {{ scope.row.always_show ? "是" : "否" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="固定路由" prop="affix" min-width="100">
-            <template #default="scope">
-              <el-tag :type="scope.row.affix ? 'success' : 'danger'">
-                {{ scope.row.affix ? "是" : "否" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="菜单标题" prop="title" min-width="200" />
-          <el-table-column
-            label="权限标识"
-            prop="permission"
-            show-overflow-tooltip
-            min-width="220"
-          />
-          <el-table-column label="路由名称" prop="route_name" min-width="200" />
-          <el-table-column label="路由路径" prop="route_path" min-width="200" />
-          <el-table-column
-            label="组件路径"
-            prop="component_path"
-            show-overflow-tooltip
-            min-width="200"
-          />
-          <el-table-column label="路由参数" prop="params" min-width="100" />
-          <el-table-column label="描述" prop="description" show-overflow-tooltip min-width="200" />
-          <el-table-column label="创建时间" prop="created_time" min-width="200" sortable />
-          <el-table-column label="更新时间" prop="updated_time" min-width="200" sortable />
-          <el-table-column fixed="right" label="操作" align="center" min-width="260">
-            <template #default="scope">
-              <el-button
-                v-if="scope.row.type == MenuTypeEnum.CATALOG || scope.row.type == MenuTypeEnum.MENU"
-                v-hasPerm="['module_system:menu:create']"
-                type="success"
-                link
-                size="small"
-                icon="plus"
-                @click.stop="handleOpenDialog('create', undefined, scope.row.id)"
-              >
-                新增
-              </el-button>
-              <el-button
-                v-hasPerm="['module_system:menu:detail']"
-                type="info"
-                size="small"
-                link
-                icon="document"
-                @click="handleOpenDialog('detail', scope.row.id)"
-              >
-                详情
-              </el-button>
-              <el-button
-                v-hasPerm="['module_system:menu:update']"
-                type="primary"
-                size="small"
-                link
-                icon="edit"
-                @click="handleOpenDialog('update', scope.row.id)"
-              >
-                编辑
-              </el-button>
-              <el-button
-                v-hasPerm="['module_system:menu:delete']"
-                type="danger"
-                size="small"
-                link
-                icon="delete"
-                @click="handleDelete([scope.row.id])"
-              >
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </el-card>
-
-    <!-- 弹窗区域 -->
-    <el-drawer
+    <EnhancedDrawer
       v-model="dialogVisible.visible"
       :title="dialogVisible.title"
       :size="drawerSize"
@@ -372,8 +270,8 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="状态" :span="2">
-            <el-tag :type="detailFormData.status ? 'success' : 'danger'">
-              {{ detailFormData.status ? "启用" : "停用" }}
+            <el-tag :type="detailFormData.status === '0' ? 'success' : 'danger'">
+              {{ detailFormData.status === "0" ? "启用" : "停用" }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="排序" :span="2">
@@ -673,7 +571,7 @@
           <el-button @click="handleCloseDialog">取消</el-button>
         </div>
       </template>
-    </el-drawer>
+    </EnhancedDrawer>
   </div>
 </template>
 
@@ -683,6 +581,7 @@ defineOptions({
   inheritAttrs: false,
 });
 
+import { ref, reactive, computed } from "vue";
 import { useAppStore } from "@/store/modules/app.store";
 import { useUserStore } from "@/store/modules/user.store";
 import { DeviceEnum } from "@/enums/settings/device.enum";
@@ -690,31 +589,65 @@ import { DeviceEnum } from "@/enums/settings/device.enum";
 import MenuAPI, { MenuPageQuery, MenuForm, MenuTable } from "@/api/module_system/menu";
 import { MenuTypeEnum } from "@/enums/system/menu.enum";
 import { formatTree } from "@/utils/common";
-import { formatToDateTime } from "@/utils/dateUtil";
+import CrudToolbarLeft from "@/components/CURD/CrudToolbarLeft.vue";
+import CrudToolbarRight from "@/components/CURD/CrudToolbarRight.vue";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDrawer from "@/components/CURD/EnhancedDrawer.vue";
+import { useCrudList } from "@/components/CURD/useCrudList";
+import type { ISearchConfig, IContentConfig } from "@/components/CURD/types";
 
 const appStore = useAppStore();
 const userStore = useUserStore();
 
-const queryFormRef = ref();
+const { searchRef, contentRef, handleQueryClick, handleResetClick, refreshList } = useCrudList();
 const dataFormRef = ref();
-const selectIds = ref<number[]>([]);
-const loading = ref(false);
+const submitLoading = ref(false);
 
-const isExpand = ref(false);
-const isExpandable = ref(true);
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_system:menu",
+  colon: true,
+  isExpandable: true,
+  showNumber: 2,
+  form: { labelWidth: "auto" },
+  formItems: [
+    {
+      prop: "name",
+      label: "菜单名称",
+      type: "input",
+      attrs: { placeholder: "请输入菜单名称", clearable: true },
+    },
+    {
+      prop: "status",
+      label: "状态",
+      type: "select",
+      options: [
+        { label: "启用", value: "0" },
+        { label: "停用", value: "1" },
+      ],
+      attrs: { placeholder: "请选择状态", clearable: true, style: { width: "167.5px" } },
+    },
+    {
+      prop: "created_time",
+      label: "创建时间",
+      type: "date-picker",
+      initialValue: [],
+      attrs: {
+        type: "datetimerange",
+        valueFormat: "YYYY-MM-DD HH:mm:ss",
+        rangeSeparator: "至",
+        startPlaceholder: "开始日期",
+        endPlaceholder: "结束日期",
+        style: { width: "340px" },
+      },
+    },
+  ],
+});
 
-// 分页表单
-const pageTableData = ref<MenuTable[]>([]);
+const contentCols = reactive([{ prop: "name", label: "菜单名称", show: true }]);
 
 // 详情表单
 const detailFormData = ref<MenuTable>({});
-
-// 分页查询参数
-const queryFormData = reactive<MenuPageQuery>({
-  name: undefined,
-  status: undefined,
-  created_time: undefined,
-});
 
 // 编辑表单
 const formData = reactive<MenuForm>({
@@ -750,6 +683,49 @@ const drawerSize = computed(() => (appStore.device === DeviceEnum.DESKTOP ? "600
 
 // 顶级菜单下拉选项
 const menuOptions = ref<OptionType[]>([]);
+
+function filterMenuTypes(nodes: MenuTable[]) {
+  return nodes
+    .filter((node) => node.type === MenuTypeEnum.CATALOG || node.type === MenuTypeEnum.MENU)
+    .map((node: any): any => ({
+      ...node,
+      children: node.children ? filterMenuTypes(node.children) : [],
+    }));
+}
+
+const contentConfig = reactive<IContentConfig<MenuPageQuery>>({
+  permPrefix: "module_system:menu",
+  pk: "id",
+  cols: contentCols as IContentConfig["cols"],
+  hideColumnFilter: true,
+  toolbar: [],
+  defaultToolbar: ["refresh"],
+  pagination: false,
+  indexAction: async (params) => {
+    const res = await MenuAPI.listMenu(params as MenuPageQuery);
+    const tree = res.data.data || [];
+    menuOptions.value = formatTree(filterMenuTypes(tree));
+    return tree;
+  },
+  deleteAction: async (ids) => {
+    await MenuAPI.deleteMenu(
+      ids
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n))
+    );
+    await userStore.getUserInfo();
+  },
+  deleteConfirm: {
+    title: "警告",
+    message: "确认删除该项数据?",
+    type: "warning",
+  },
+});
+
+function handleRowDelete(id: number) {
+  contentRef.value?.handleDelete(id);
+}
 
 // 表单验证规则
 const rules = reactive({
@@ -789,71 +765,6 @@ const rules = reactive({
 // 选择表格的行菜单ID
 const selectedMenuId = ref<number | undefined>();
 
-// 日期范围临时变量
-const dateRange = ref<[Date, Date] | []>([]);
-
-// 处理日期范围变化
-function handleDateRangeChange(range: [Date, Date]) {
-  dateRange.value = range;
-  if (range && range.length === 2) {
-    queryFormData.created_time = [formatToDateTime(range[0]), formatToDateTime(range[1])];
-  } else {
-    queryFormData.created_time = undefined;
-  }
-}
-
-// 列表刷新
-async function handleRefresh() {
-  loading.value = true;
-  try {
-    const response = await MenuAPI.listMenu(queryFormData);
-    pageTableData.value = response.data.data;
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-// 修改菜单选项过滤逻辑，添加递归过滤函数
-const filterMenuTypes = (nodes: MenuTable[]) => {
-  return nodes
-    .filter((node) => node.type === MenuTypeEnum.CATALOG || node.type === MenuTypeEnum.MENU)
-    .map((node: any): any => ({
-      ...node,
-      children: node.children ? filterMenuTypes(node.children) : [],
-    }));
-};
-
-// 加载表格数据
-async function loadingData() {
-  loading.value = true;
-  try {
-    const response = await MenuAPI.listMenu(queryFormData);
-    pageTableData.value = response.data.data;
-    // 加载菜单选项，只显示目录、菜单
-    menuOptions.value = formatTree(filterMenuTypes(response.data.data));
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-// 查询（重置页码后获取数据）
-async function handleQuery() {
-  loadingData();
-}
-
-// 重置查询
-async function handleResetQuery() {
-  queryFormRef.value.resetFields();
-  // 额外清空日期范围与时间查询参数
-  dateRange.value = [];
-  queryFormData.created_time = undefined;
-  handleQuery();
-}
-
 // 定义初始表单数据常量
 const initialFormData: MenuForm = {
   id: undefined,
@@ -885,11 +796,6 @@ async function resetForm() {
   }
   // 完全重置 formData 为初始状态
   Object.assign(formData, initialFormData);
-}
-
-// 行复选框选中项变化
-async function handleSelectionChange(selection: any) {
-  selectIds.value = selection.map((item: any) => item.id);
 }
 
 // 行点击事件
@@ -944,11 +850,9 @@ function handleMenuTypeChange() {
 
 // 提交表单
 async function handleSubmit() {
-  // 表单校验
   dataFormRef.value.validate(async (valid: any) => {
     if (valid) {
-      loading.value = true;
-      // 根据弹窗传入的参数(deatil\create\update)判断走什么逻辑
+      submitLoading.value = true;
       const id = formData.id;
       try {
         if (id) {
@@ -958,43 +862,24 @@ async function handleSubmit() {
         }
         await userStore.getUserInfo();
         dialogVisible.visible = false;
-        resetForm();
-        handleResetQuery();
+        await resetForm();
+        refreshList();
       } catch (error: any) {
         console.error(error);
       } finally {
-        loading.value = false;
+        submitLoading.value = false;
       }
     }
   });
 }
 
-// 删除、批量删除
-async function handleDelete(ids: number[]) {
-  ElMessageBox.confirm("确认删除该项数据?", "警告", {
-    confirmButtonText: "确定",
-    cancelButtonText: "取消",
-    type: "warning",
-  })
-    .then(async () => {
-      try {
-        loading.value = true;
-        await MenuAPI.deleteMenu(ids);
-        await userStore.getUserInfo();
-        handleResetQuery();
-      } catch (error: any) {
-        console.error(error);
-      } finally {
-        loading.value = false;
-      }
-    })
-    .catch(() => {
-      ElMessageBox.close();
-    });
-}
-
-// 批量启用/停用
 async function handleMoreClick(status: string) {
+  const rows = contentRef.value?.getSelectionData() as MenuTable[] | undefined;
+  const ids = (rows ?? []).map((r) => r.id).filter((id): id is number => id != null);
+  if (!ids.length) {
+    ElMessage.warning("请先选择要操作的数据");
+    return;
+  }
   ElMessageBox.confirm(`确认${status === "0" ? "启用" : "停用"}该项数据?`, "警告", {
     confirmButtonText: "确定",
     cancelButtonText: "取消",
@@ -1002,21 +887,14 @@ async function handleMoreClick(status: string) {
   })
     .then(async () => {
       try {
-        loading.value = true;
-        await MenuAPI.batchMenu({ ids: selectIds.value, status });
-        handleResetQuery();
+        await MenuAPI.batchMenu({ ids, status });
+        refreshList();
       } catch (error: any) {
         console.error(error);
-      } finally {
-        loading.value = false;
       }
     })
     .catch(() => {
       ElMessageBox.close();
     });
 }
-
-onMounted(() => {
-  handleQuery();
-});
 </script>

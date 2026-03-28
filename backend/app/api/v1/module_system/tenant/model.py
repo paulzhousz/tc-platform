@@ -1,4 +1,3 @@
-# # -*- coding: utf-8 -*-
 
 # from datetime import datetime
 # from sqlalchemy import DateTime, String
@@ -10,12 +9,12 @@
 # class TenantModel(ModelMixin):
 #     """
 #     租户模型
-    
+
 #     核心数据隔离模型：
 #     - 系统租户(id=1)：管理所有租户和系统配置,由平台超管管理
 #     - 普通租户(id>1)：拥有自己的用户、部门、角色、客户等数据,租户间完全隔离
 #     - 所有业务表通过tenant_id字段关联到租户,实现租户间数据隔离
-    
+
 #     注意：
 #     - 租户表本身不需要tenant_id字段(租户不属于租户)
 #     - 租户表不需要customer_id字段(租户不属于客户)
@@ -28,14 +27,14 @@
 #     code: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, comment='租户编码')
 #     start_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None, comment='开始时间')
 #     end_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None, comment='结束时间')
-    
+
 #     @validates('name')
 #     def validate_name(self, key: str, name: str) -> str:
 #         """验证名称不为空"""
 #         if not name or not name.strip():
 #             raise ValueError('名称不能为空')
 #         return name
-    
+
 #     @validates('code')
 #     def validate_code(self, key: str, code: str) -> str:
 #         """验证编码格式校验"""

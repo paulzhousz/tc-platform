@@ -32,9 +32,17 @@
     </template>
 
     <!--【非叶子节点】显示含多个子节点的父菜单，或始终显示的单子节点 -->
-    <el-sub-menu v-else :index="resolvePath(item.path)" :data-path="item.path" teleported>
+    <el-sub-menu
+      v-else
+      :index="resolvePath(item.path)"
+      :data-path="resolvePath(item.path)"
+      :class="{ 'has-active-child': isActiveChild }"
+      teleported
+    >
       <template #title>
-        <MenuItemContent v-if="item.meta" :icon="item.meta.icon" :title="item.meta.title" />
+        <span class="menu-title-wrapper" :data-path="resolvePath(item.path)">
+          <MenuItemContent v-if="item.meta" :icon="item.meta.icon" :title="item.meta.title" />
+        </span>
       </template>
 
       <MenuItem
@@ -58,8 +66,11 @@ defineOptions({
 
 import path from "path-browserify";
 import { RouteRecordRaw } from "vue-router";
+import { useRoute } from "vue-router";
 
 import { isExternal } from "@/utils";
+
+const route = useRoute();
 
 const props = defineProps({
   /**
@@ -134,10 +145,18 @@ function resolvePath(routePath: string) {
   // 拼接父路径和当前路径
   return path.resolve(props.basePath, routePath);
 }
+
+// 父级菜单是否应展示“包含激活子菜单”的高亮状态（不依赖 DOM，避免折叠/teleported 时丢失）
+const isActiveChild = computed(() => {
+  const currentPath =
+    typeof route.meta?.activeMenu === "string" ? route.meta.activeMenu : (route.path as string);
+  const selfPath = resolvePath(props.item.path || "");
+  if (!selfPath) return false;
+  return currentPath === selfPath || currentPath.startsWith(`${selfPath}/`);
+});
 </script>
 
 <style lang="scss">
-/* stylelint-disable no-descending-specificity */
 .hideSidebar {
   .submenu-title-noDropdown {
     position: relative;
@@ -180,64 +199,44 @@ function resolvePath(routePath: string) {
   }
 }
 
-html.dark {
-  .el-menu-item:hover {
-    background-color: var(--layout-menu-hover);
-  }
-}
-
-// 激活菜单项样式 - 只有文字变色，无背景色
-.el-menu-item.is-active {
-  font-weight: 500;
-  color: var(--layout-sidebar-active-text, var(--el-color-primary-dark-2)) !important;
-
-  .menu-icon {
-    color: var(--layout-sidebar-active-text, var(--el-color-primary-dark-2)) !important;
-  }
-}
-
 // 父菜单激活状态样式 - 当子菜单激活时，父菜单显示激活状态
 .el-sub-menu {
+  .menu-title-wrapper {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    line-height: 1;
+  }
+
   // 当父菜单包含激活子菜单时的样式
   &.has-active-child .el-sub-menu__title {
-    color: var(--layout-sidebar-active-text, var(--el-color-primary-dark-2)) !important;
-    background-color: var(--layout-sidebar-active-bg) !important;
+    color: var(--el-color-primary) !important;
 
     .menu-icon {
-      color: var(--layout-sidebar-active-text, var(--el-color-primary-dark-2)) !important;
+      color: var(--el-color-primary) !important;
     }
-  }
-
-  &.has-active-child .el-sub-menu__title:hover {
-    background-color: var(--layout-sidebar-active-hover-bg) !important;
-  }
-
-  // 深蓝色侧边栏配色下的父菜单激活状态
-  html.sidebar-color-blue &.has-active-child .el-sub-menu__title {
-    color: var(--layout-sidebar-active-text, var(--el-color-primary-light-3)) !important;
-    background-color: var(--layout-sidebar-active-bg) !important;
-
-    .menu-icon {
-      color: var(--layout-sidebar-active-text, var(--el-color-primary-light-3)) !important;
-    }
-  }
-
-  html.sidebar-color-blue &.has-active-child .el-sub-menu__title:hover {
-    background-color: var(--layout-sidebar-active-hover-bg) !important;
   }
 
   // 深色主题下的父菜单激活状态
-  html.dark &.has-active-child .el-sub-menu__title {
-    color: var(--layout-sidebar-active-text, var(--el-color-primary-light-3)) !important;
-    background-color: var(--layout-sidebar-active-bg) !important;
+  html.dark & {
+    &.has-active-child .el-sub-menu__title {
+      color: var(--el-color-primary-light-3) !important;
 
-    .menu-icon {
-      color: var(--layout-sidebar-active-text, var(--el-color-primary-light-3)) !important;
+      .menu-icon {
+        color: var(--el-color-primary-light-3) !important;
+      }
     }
   }
 
-  html.dark &.has-active-child .el-sub-menu__title:hover {
-    background-color: var(--layout-sidebar-active-hover-bg) !important;
+  // 深蓝色侧边栏配色下的父菜单激活状态
+  html.sidebar-color-blue & {
+    &.has-active-child .el-sub-menu__title {
+      color: var(--el-color-primary-light-3) !important;
+
+      .menu-icon {
+        color: var(--el-color-primary-light-3) !important;
+      }
+    }
   }
 }
 </style>

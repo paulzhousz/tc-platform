@@ -91,7 +91,7 @@
     </el-card>
 
     <!-- 数据统计 -->
-    <el-row :gutter="10" class="mt-4">
+    <el-row :gutter="16" class="mt-4">
       <!-- 在线用户数量 -->
       <el-col :span="8" :xs="24" class="mb-xs-3">
         <el-card shadow="hover" class="h-full flex flex-col">
@@ -249,7 +249,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="10" class="mt-4">
+    <el-row :gutter="16" class="mt-4">
       <!-- 访问趋势统计图 -->
       <el-col :xs="24" :span="16">
         <el-card>
@@ -569,7 +569,6 @@ onMounted(() => {
 
   .version-item {
     padding: 16px;
-    margin-bottom: 12px;
     background: var(--el-fill-color-lighter);
     border-radius: 8px;
     transition: all 0.2s;

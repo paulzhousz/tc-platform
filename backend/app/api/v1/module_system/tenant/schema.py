@@ -1,4 +1,3 @@
-# # -*- coding: utf-8 -*-
 
 # from typing import Optional
 # from fastapi import Query
@@ -17,8 +16,8 @@
 #     description: Optional[str] = Field(default=None, max_length=255, description="描述")
 #     start_time: Optional[DateTimeStr] = Field(default=None, description="开始时间")
 #     end_time: Optional[DateTimeStr] = Field(default=None, description="结束时间")
-    
-#     @field_validator('name')    
+
+#     @field_validator('name')
 #     @classmethod
 #     def _validate_name(cls, v: str) -> str:
 #         v = v.strip()
@@ -37,7 +36,7 @@
 #         # 格式校验：名称只能包含字母、数字、下划线和中划线
 #         if not self.name.isalnum() and not all(c in '-_' for c in self.name):
 #             raise ValueError('名称只能包含字母、数字、下划线和中划线')
-        
+
 #         return self
 
 
@@ -60,7 +59,7 @@
 #         status: Optional[str] = Query(None, description="状态用(True:启用 False:禁用)"),
 #         created_time: Optional[list[DateTimeStr]] = Query(None, description="创建时间范围", example=["2025-01-01 00:00:00", "2025-12-31 23:59:59"]),
 #     ) -> None:
-        
+
 #         # 模糊查询字段
 #         self.name = ("like", name)
 
@@ -70,4 +69,3 @@
 #         # 时间范围查询
 #         if created_time and len(created_time) == 2:
 #             self.created_time = ("between", (created_time[0], created_time[1]))
-

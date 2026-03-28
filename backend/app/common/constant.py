@@ -565,8 +565,8 @@ class GenConstant:
         }
         if settings.DATABASE_TYPE == "postgres"
         else {
-            # 布尔类型
-            "TINYINT": "Boolean",
+            # 布尔语义仅 tinyint(1)，其余 tinyint 在 get_sqlalchemy_type 中映射为 SmallInteger
+            "TINYINT": "SmallInteger",
             # 数值类型
             "SMALLINT": "SmallInteger",
             "MEDIUMINT": "Integer",
@@ -684,6 +684,7 @@ class GenConstant:
             # PostgreSQL 字符串类型
             "character": "str",
             "character varying": "str",
+            "citext": "str",
 
             # PostgreSQL 二进制类型
             "bytea": "bytes",

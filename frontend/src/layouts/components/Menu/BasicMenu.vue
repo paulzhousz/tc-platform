@@ -1,7 +1,6 @@
 <!-- 菜单组件 -->
 <template>
   <el-menu
-    ref="menuRef"
     :default-active="activeMenuPath"
     :collapse="!appStore.sidebar.opened"
     :background-color="menuThemeProps.backgroundColor"
@@ -11,8 +10,6 @@
     :unique-opened="false"
     :collapse-transition="false"
     :mode="menuMode"
-    @open="onMenuOpen"
-    @close="onMenuClose"
   >
     <!-- 菜单项 -->
     <MenuItem
@@ -26,13 +23,13 @@
 
 <script lang="ts" setup>
 import { useRoute } from "vue-router";
-import { nextTick } from "vue";
 import path from "path-browserify";
-import type { MenuInstance } from "element-plus";
 import type { RouteRecordRaw } from "vue-router";
+import { SidebarColor } from "@/enums/settings/theme.enum";
 import { useSettingsStore, useAppStore } from "@/store";
 import { isExternal } from "@/utils/index";
 import MenuItem from "./components/MenuItem.vue";
+import variables from "@/styles/variables.module.scss";
 
 const props = defineProps({
   data: {
@@ -51,25 +48,25 @@ const props = defineProps({
   },
 });
 
-const menuRef = ref<MenuInstance>();
 const settingsStore = useSettingsStore();
 const appStore = useAppStore();
 const currentRoute = useRoute();
 
-// 存储已展开的菜单项索引
-const expandedMenuIndexes = ref<string[]>([]);
-
 // 获取主题
 const theme = computed(() => settingsStore.theme);
 
+// 获取浅色主题下的侧边栏配色方案
+const sidebarColorScheme = computed(() => settingsStore.sidebarColorScheme);
+
 // 菜单主题属性
-// 顶栏横向菜单背景由布局 CSS 设为 transparent；若此处传 CSS 变量，EP 内部 TinyColor 无法解析会退成 #000，hover 背景发黑
 const menuThemeProps = computed(() => {
-  const isHorizontal = props.menuMode === "horizontal";
+  const isDarkOrClassicBlue =
+    theme.value === "dark" || sidebarColorScheme.value === SidebarColor.CLASSIC_BLUE;
+
   return {
-    backgroundColor: isHorizontal ? "" : "var(--layout-sidebar-bg)",
-    textColor: "var(--layout-sidebar-text)",
-    activeTextColor: "var(--layout-sidebar-active-text)",
+    backgroundColor: isDarkOrClassicBlue ? variables["menu-background"] : undefined,
+    textColor: isDarkOrClassicBlue ? variables["menu-text"] : undefined,
+    activeTextColor: isDarkOrClassicBlue ? variables["menu-active-text"] : undefined,
   };
 });
 
@@ -109,138 +106,6 @@ function resolveFullPath(routePath: string) {
   return path.resolve(props.basePath, routePath);
 }
 
-/**
- * 打开菜单
- *
- * @param index 当前展开的菜单项索引
- */
-const onMenuOpen = (index: string) => {
-  expandedMenuIndexes.value.push(index);
-  nextTick(() => {
-    updateParentMenuStyles();
-  });
-};
-
-/**
- * 关闭菜单
- *
- * @param index 当前收起的菜单项索引
- */
-const onMenuClose = (index: string) => {
-  expandedMenuIndexes.value = expandedMenuIndexes.value.filter((item) => item !== index);
-  nextTick(() => {
-    updateParentMenuStyles();
-  });
-};
-
-/**
- * 监听展开的菜单项变化，更新父菜单样式
- */
-watch(
-  () => expandedMenuIndexes.value,
-  () => {
-    updateParentMenuStyles();
-  }
-);
-
-/**
- * 监听菜单模式变化：当菜单模式切换为水平模式时，关闭所有展开的菜单项，
- * 避免在水平模式下菜单项显示错位。
- */
-watch(
-  () => props.menuMode,
-  (newMode) => {
-    if (newMode === "horizontal" && menuRef.value) {
-      expandedMenuIndexes.value.forEach((item) => menuRef.value!.close(item));
-    }
-  }
-);
-
-/**
- * 监听激活菜单变化，为包含激活子菜单的父菜单添加样式类
- */
-watch(
-  () => activeMenuPath.value,
-  () => {
-    nextTick(() => {
-      updateParentMenuStyles();
-    });
-  },
-  { immediate: true }
-);
-
-/**
- * 监听路由变化，确保菜单能随TagsView切换而正确激活
- */
-watch(
-  () => currentRoute.path,
-  () => {
-    nextTick(() => {
-      updateParentMenuStyles();
-    });
-  }
-);
-
-/**
- * 更新父菜单样式 - 为包含激活子菜单的父菜单添加 has-active-child 类
- */
-function updateParentMenuStyles() {
-  if (!menuRef.value?.$el) return;
-
-  nextTick(() => {
-    try {
-      const menuEl = menuRef.value?.$el as HTMLElement;
-      if (!menuEl) return;
-
-      // 移除所有现有的 has-active-child 类
-      const allSubMenus = menuEl.querySelectorAll(".el-sub-menu");
-      allSubMenus.forEach((subMenu) => {
-        subMenu.classList.remove("has-active-child");
-      });
-
-      // 查找当前激活的菜单项
-      const activeMenuItem = menuEl.querySelector(".el-menu-item.is-active");
-
-      if (activeMenuItem) {
-        // 向上查找父级 el-sub-menu 元素
-        let parent = activeMenuItem.parentElement;
-        while (parent && parent !== menuEl) {
-          if (parent.classList.contains("el-sub-menu")) {
-            parent.classList.add("has-active-child");
-          }
-          parent = parent.parentElement;
-        }
-      } else {
-        // 水平模式下可能需要特殊处理
-        if (props.menuMode === "horizontal") {
-          // 对于水平菜单，使用路径匹配来找到父菜单
-          const currentPath = activeMenuPath.value;
-
-          // 查找所有父菜单项，检查哪个包含当前路径
-          allSubMenus.forEach((subMenu) => {
-            const subMenuEl = subMenu as HTMLElement;
-            const subMenuPath =
-              subMenuEl.getAttribute("data-path") ||
-              subMenuEl.querySelector(".el-sub-menu__title")?.getAttribute("data-path");
-
-            // 如果找到包含当前路径的父菜单，则添加激活类
-            if (subMenuPath && currentPath.startsWith(subMenuPath)) {
-              subMenuEl.classList.add("has-active-child");
-            }
-          });
-        }
-      }
-    } catch (error) {
-      console.error("更新父菜单样式时出错:", error);
-    }
-  });
-}
-
-/**
- * 组件挂载后立即更新父菜单样式
- */
-onMounted(() => {
-  // 确保在组件挂载后更新样式，不依赖于异步操作
-  updateParentMenuStyles();
-});
+// 父级高亮（has-active-child）已改为由 MenuItem 依据路由状态计算并绑定 class，
+// 不再依赖 DOM 查询，避免折叠/teleported 场景丢失。
 </script>

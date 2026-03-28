@@ -55,7 +55,7 @@ const { routes } = useLayoutMenu();
     left: 0;
     z-index: 999;
     width: $sidebar-width;
-    background-color: var(--layout-sidebar-bg);
+    background-color: var(--menu-background);
     transition: width 0.28s;
 
     &--collapsed {
@@ -65,7 +65,7 @@ const { routes } = useLayoutMenu();
     .layout-sidebar {
       position: relative;
       height: 100%;
-      background-color: var(--layout-sidebar-bg);
+      background-color: var(--menu-background);
       transition: width 0.28s;
 
       &.has-logo {
@@ -95,9 +95,7 @@ const { routes } = useLayoutMenu();
       position: sticky;
       top: 0;
       z-index: 9;
-      color: var(--layout-header-text);
-      background-color: var(--layout-header-bg);
-      border-bottom: 1px solid var(--layout-header-border);
+      background-color: var(--layout-header-bg, var(--el-bg-color-overlay));
       transition: width 0.28s;
     }
   }

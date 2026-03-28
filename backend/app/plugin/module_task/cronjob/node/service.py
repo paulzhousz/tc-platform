@@ -28,7 +28,9 @@ class NodeService:
     @classmethod
     async def get_node_options_service(cls, auth: AuthSchema) -> list[dict]:
         """
-        获取节点类型选项列表，用于流程编排
+        获取定时任务节点（task_node）列表，供调度/调试使用。
+
+        工作流画布请使用 ``app.plugin.module_task.workflow.node_type`` 模块下接口（/task/workflow/node-type/options）。
 
         参数:
         - auth (AuthSchema): 认证信息模型

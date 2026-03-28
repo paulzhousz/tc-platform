@@ -95,12 +95,29 @@
                 <el-color-picker
                   v-model="selectedThemeColor"
                   :predefine="allColorPresets"
+                  show-alpha
                   size="small"
                   class="custom-color-picker"
                 />
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- 导航主题 -->
+      <section v-if="!isDark" class="config-section">
+        <el-divider>{{ t("settings.navigation") }}</el-divider>
+        <div class="config-item flex-x-between">
+          <span class="text-xs">{{ t("settings.sidebarColorScheme") }}</span>
+          <el-radio-group v-model="sidebarColor" @change="changeSidebarColor">
+            <el-radio :value="SidebarColor.CLASSIC_BLUE">
+              {{ t("settings.classicBlue") }}
+            </el-radio>
+            <el-radio :value="SidebarColor.MINIMAL_WHITE">
+              {{ t("settings.minimalWhite") }}
+            </el-radio>
+          </el-radio-group>
         </div>
       </section>
 
@@ -223,7 +240,13 @@
 import { DocumentCopy, RefreshLeft, Check } from "@element-plus/icons-vue";
 
 const { t } = useI18n();
-import { LayoutMode, ThemeMode, DeviceEnum, PageSwitchingAnimationOptions } from "@/enums";
+import {
+  LayoutMode,
+  SidebarColor,
+  ThemeMode,
+  DeviceEnum,
+  PageSwitchingAnimationOptions,
+} from "@/enums";
 import { useSettingsStore, useAppStore } from "@/store";
 import { themeColorPresets } from "@/settings";
 
@@ -257,10 +280,11 @@ const layoutOptions: LayoutOption[] = [
 const settingsStore = useSettingsStore();
 
 // 主题颜色选择器相关
-const displayColorPresets = computed(() => themeColorPresets.slice(0, 9)); // 只显示前9个预设颜色
+const displayColorPresets = computed(() => themeColorPresets.slice(0, 7)); // 只显示前9个预设颜色
 const allColorPresets = themeColorPresets; // 所有颜色预设，用于自定义颜色选择器
 
 const isDark = ref<boolean>(settingsStore.theme === ThemeMode.DARK);
+const sidebarColor = ref(settingsStore.sidebarColorScheme);
 
 const selectedThemeColor = computed({
   get: () => settingsStore.themeColor,
@@ -279,6 +303,15 @@ const drawerVisible = computed({
  */
 const handleThemeChange = (isDark: string | number | boolean) => {
   settingsStore.updateTheme(isDark ? ThemeMode.DARK : ThemeMode.LIGHT);
+};
+
+/**
+ * 更改侧边栏颜色
+ *
+ * @param val 颜色方案名称
+ */
+const changeSidebarColor = (val: any) => {
+  settingsStore.updateSidebarColorScheme(val);
 };
 
 /**
@@ -337,6 +370,7 @@ const handleResetSettings = async () => {
 
     // 同步更新本地状态
     isDark.value = settingsStore.theme === ThemeMode.DARK;
+    sidebarColor.value = settingsStore.sidebarColorScheme;
 
     ElMessage.success(t("settings.resetSuccess"));
   } catch {
@@ -368,6 +402,7 @@ const generateSettingsCode = (): string => {
     themeColor: `"${settingsStore.themeColor}"`,
     showWatermark: settingsStore.showWatermark,
     watermarkContent: "pkg.name",
+    sidebarColorScheme: `SidebarColor.${settingsStore.sidebarColorScheme.toUpperCase().replace("-", "_")}`,
     grayMode: settingsStore.grayMode,
     userEnableAi: settingsStore.userEnableAi,
   };
@@ -390,6 +425,7 @@ const generateSettingsCode = (): string => {
   themeColor: ${settings.themeColor},
   showWatermark: ${settings.showWatermark},
   watermarkContent: ${settings.watermarkContent},
+  sidebarColorScheme: ${settings.sidebarColorScheme},
   grayMode: ${settings.grayMode},
   userEnableAi: ${settings.userEnableAi},
 };`;
@@ -651,11 +687,11 @@ const handleCloseDrawer = () => {
 /* 主题颜色选择器样式 */
 .theme-color-selector {
   display: flex;
-  flex-direction: column;
   gap: 12px;
-  align-items: stretch;
+  align-items: center;
 
   .color-label {
+    flex-shrink: 0;
     min-width: 60px;
   }
 

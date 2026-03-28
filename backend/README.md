@@ -2,6 +2,10 @@
 
 一个基于 FastAPI 框架构建企业级后端架构解决方案，为前端 Vue3 管理系统提供完整的 API 服务支持。
 
+> **和仓库根目录文档的关系**：**一键前后端启动、演示账号、Docker 部署、新手导航、Mermaid 架构图与默认端口（5180 / 8001 等）** 请以仓库根目录 [**README.md**](../README.md)（英文 [**README.en.md**](../README.en.md)）为准；**本文档**侧重 `backend/` 目录结构、迁移命令与开发约定。
+
+与 **`env/.env.dev.example`** 对齐时：**`SERVER_PORT=8001`**（本机 **`http://127.0.0.1:8001`**），**`ROOT_PATH=/api/v1`**，Swagger **`/docs`**；前端开发端口见 **`../frontend/.env.development.example`** 中的 **`VITE_APP_PORT=5180`**、`VITE_API_BASE_URL=http://127.0.0.1:8001`。
+
 ## 🚀 项目特性
 
 - **现代技术栈**: FastAPI + SQLAlchemy 2.0 + Pydantic 2.x
@@ -87,71 +91,68 @@ module_*/
 ### 环境要求
 
 - **Python**: 3.10+
-- **数据库**: MySQL 8.0+ / PostgreSQL 13+ / SQLite 3.x
-- **Redis**: 6.0+ (可选)
+- **数据库**: MySQL 8.0+ / PostgreSQL 13+ / SQLite 3.x（连接串在 `env/.env.dev`）
+- **Redis**: 与 `.env.dev` 中配置一致（多数场景为必需）
 
-#### 1. 数据库初始化
+### 第一次在本机跑起来（ checklist ）
+
+1. 复制 `env/.env.dev.example` → `env/.env.dev`，填写数据库、Redis 等（先在 DB 中建好空库）。
+2. 在 **`backend/` 目录下** 安装依赖：推荐 **`uv sync`**；或 `pip install -r requirements.txt`。
+3. **启动**：`uv run main.py run --env=dev`（或 `python main.py run --env=dev`）。**首次启动会自动初始化数据库表与基础数据**，一般**无需**先执行 `upgrade`。接口文档示例：`http://127.0.0.1:8001/docs`（端口见 `.env.dev` 中 `SERVER_PORT`）。
+
+### 数据库迁移命令（模型变更时使用）
+
+日常**首次启动不必手动执行**；当你**修改了 ORM 模型**并需用 Alembic 管理结构变更时再使用：
 
 ```bash
-# 生成迁移文件（仅首次或模型变更时）
-python main.py revision  --env=dev(不加默认为dev)
+# 生成迁移文件（模型变更后）
+python main.py revision --env=dev
+# 应用迁移
+python main.py upgrade --env=dev
 
-# 应用数据库迁移
-python main.py upgrade --env=dev(不加默认为dev)
-
-# 如果是uv管理管理python则是
-uv run main.py revision  --env=dev(不加默认为dev)
-uv run main.py upgrade --env=dev(不加默认为dev)
+# 使用 uv 时
+uv run main.py revision --env=dev
+uv run main.py upgrade --env=dev
 ```
 
-#### 2. 启动服务
+### 安装依赖与启动服务
 
 ```bash
-# 创建虚拟环境
+# 虚拟环境（可选）
 python -m venv .venv
-# 激活虚拟环境
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 
-# 如果是uv管理管理python则是
-uv venv (默认创建.venv)
-
-
-# 安装依赖
-pip install -r requirements.txt
-# 如果是uv管理管理python则是
-uv add -r requirements.txt
-或
+# 依赖：推荐 uv（与 pyproject.toml 一致）
 uv sync
 
-# 开发环境启动
-python main.py run --env=dev (不加默认为dev)
+# 或 pip
+# pip install -r requirements.txt
 
-# 生产环境启动
-python main.py run --env=prod (不加默认为dev)
+# 开发环境
+uv run main.py run --env=dev
+# 或 python main.py run --env=dev
 
-# 如果是uv管理管理python则是
-uv run main.py run --env=dev (不加默认为dev)
-uv run main.py run --env=prod (不加默认为dev)
+# 生产环境示例
+# uv run main.py run --env=prod
 ```
 
-#### 3.代码格式化
+### 代码格式化（ruff）
 
 ```bash
-# 检查当前目录所有 Python 文件
 ruff check
-# 检查并自动修复问题
 ruff check --fix
-# 监听文件变化并重新检查
 ruff check --watch
 
-# 如果是uv管理管理python则是
+# 使用 uv 时
 uv run ruff check
 uv run ruff check --fix
 uv run ruff check --watch
 ```
+
+### 日期类型与 PostgreSQL（asyncpg）
+
+自定义 `DateStr` / `TimeStr` / `DateTimeStr`（`app/core/validator.py`）使用 **`PlainSerializer(..., when_used='json')`**：`model_dump(mode='python')` 供 ORM 使用原生类型；JSON / Redis 使用 `model_dump(mode='json')`。统一 HTTP 响应见 `app/common/response.py`。详见根目录 README。
 
 ## 📜 相关链接
 

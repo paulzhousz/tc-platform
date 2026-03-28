@@ -11,6 +11,7 @@ from app.plugin.module_generator.gencode.schema import (
     GenTableColumnOutSchema,
     GenTableOutSchema,
 )
+from app.plugin.module_generator.gencode.tools.gen_util import GenUtils
 from app.utils.common_util import CamelCaseUtil, SnakeCaseUtil
 from app.utils.string_util import StringUtil
 
@@ -19,6 +20,22 @@ class Jinja2TemplateUtil:
     """
     模板处理工具类
     """
+
+    @classmethod
+    def normalize_db_column_type_for_mapping(cls, column_type: str | None) -> str:
+        """
+        与 ``GenUtils.get_db_type`` 一致地去掉 COLLATE / UNSIGNED，便于与 ``DB_TO_SQLALCHEMY`` 键匹配。
+        """
+        ct = (column_type or "").strip()
+        if not ct:
+            return ""
+        collate_pattern = re.compile(r"\s+COLLATE\s+", re.IGNORECASE)
+        if collate_pattern.search(ct):
+            ct = collate_pattern.split(ct)[0].strip()
+        unsigned_pattern = re.compile(r"\s+UNSIGNED", re.IGNORECASE)
+        if unsigned_pattern.search(ct):
+            ct = unsigned_pattern.sub("", ct).strip()
+        return ct
 
     # 项目路径
     FRONTEND_PROJECT_PATH = "frontend"
@@ -52,6 +69,7 @@ class Jinja2TemplateUtil:
                     "camel_to_snake": SnakeCaseUtil.camel_to_snake,
                     "snake_to_camel": CamelCaseUtil.snake_to_camel,
                     "get_sqlalchemy_type": cls.get_sqlalchemy_type,
+                    "python_to_ts_type": cls.python_type_to_ts_type,
                 })
             return cls._env
         except Exception as e:
@@ -93,6 +111,23 @@ class Jinja2TemplateUtil:
         package_name = gen_table.package_name or ""
         function_name = gen_table.function_name or ""
 
+        _cols = gen_table.columns or []
+        table_column_names = frozenset(
+            c.column_name for c in _cols if getattr(c, "column_name", None)
+        )
+
+        sub_class_name = ""
+        sub_model_class_name = ""
+        sub_rel_list_name = ""
+        parent_rel_name = ""
+        if gen_table.sub and gen_table.sub_table:
+            st = gen_table.sub_table
+            scn = (st.class_name or GenUtils.convert_class_name(gen_table.sub_table_name or "")).strip()
+            sub_class_name = scn
+            sub_model_class_name = f"{scn}Model"
+            sub_rel_list_name = f"{SnakeCaseUtil.camel_to_snake(scn)}_list"
+            parent_rel_name = SnakeCaseUtil.camel_to_snake(gen_table.class_name or "")
+
         context = {
             "table_name": gen_table.table_name or "",
             "table_comment": gen_table.table_comment or "",
@@ -109,16 +144,49 @@ class Jinja2TemplateUtil:
             "model_import_list": cls.get_model_import_list(gen_table),
             "schema_import_list": cls.get_schema_import_list(gen_table),
             "permission_prefix": cls.get_permission_prefix(module_name, business_name),
+            "api_route_prefix": cls.get_api_route_prefix(module_name),
             "columns": gen_table.columns or [],
+            "table_column_names": table_column_names,
             "table": gen_table,
             "dicts": cls.get_dicts(gen_table),
             "db_type": settings.DATABASE_TYPE,
             "column_not_add_show": GenConstant.COLUMNNAME_NOT_ADD_SHOW,
             "column_not_edit_show": GenConstant.COLUMNNAME_NOT_EDIT_SHOW,
             "parent_menu_id": int(gen_table.parent_menu_id) if gen_table.parent_menu_id else None,
+            "is_sub_entity": False,
+            "sub_class_name": sub_class_name,
+            "sub_model_class_name": sub_model_class_name,
+            "sub_rel_list_name": sub_rel_list_name,
+            "parent_rel_name": parent_rel_name,
+            "parent_list_rel_name": "",
+            "parent_table_name": "",
+            "parent_model_class_name": "",
+            "parent_pk_column_name": "id",
+            "sub_table_fk_name": "",
         }
 
         return context
+
+    @classmethod
+    def prepare_sub_render_context(
+        cls, parent: GenTableOutSchema, sub: GenTableOutSchema
+    ) -> dict[str, Any]:
+        """
+        子表业务代码渲染上下文（与主表同模块、独立业务目录）。
+        """
+        ctx = cls.prepare_context(sub)
+        scn = (sub.class_name or GenUtils.convert_class_name(sub.table_name or "")).strip()
+        ctx["is_sub_entity"] = True
+        ctx["parent_class_name"] = parent.class_name or ""
+        ctx["parent_model_class_name"] = f"{parent.class_name}Model"
+        ctx["parent_table_name"] = parent.table_name or ""
+        ctx["parent_pk_column_name"] = (parent.pk_column.column_name if parent.pk_column else None) or "id"
+        ctx["parent_rel_name"] = SnakeCaseUtil.camel_to_snake(parent.class_name or "parent")
+        ctx["parent_list_rel_name"] = f"{SnakeCaseUtil.camel_to_snake(scn)}_list"
+        ctx["sub_table_fk_name"] = (parent.sub_table_fk_name or "").strip()
+        ctx["model_import_list"] = cls.get_model_import_list(sub, is_sub_entity=True)
+        ctx["schema_import_list"] = cls.get_schema_import_list(sub)
+        return ctx
 
     @classmethod
     def get_template_list(cls):
@@ -264,11 +332,14 @@ class Jinja2TemplateUtil:
         return import_list
 
     @classmethod
-    def get_model_import_list(cls, gen_table: GenTableOutSchema):
+    def get_model_import_list(
+        cls, gen_table: GenTableOutSchema, *, is_sub_entity: bool = False
+    ) -> list[str]:
         """
         获取do模板导入包列表
 
         :param gen_table: 生成表的配置信息
+        :param is_sub_entity: 是否为子表独立生成（含外键与 relationship）
         :return: 导入包列表
         """
         columns = gen_table.columns or []
@@ -296,9 +367,9 @@ class Jinja2TemplateUtil:
             # 处理Decimal类型的导入
             elif column.python_type == GenConstant.TYPE_DECIMAL:
                 import_list.add("from decimal import Decimal")
-        if gen_table.sub:
+        if gen_table.sub or is_sub_entity:
             import_list.add("from sqlalchemy import ForeignKey")
-            if gen_table.sub_table and gen_table.sub_table.columns:
+            if gen_table.sub and not is_sub_entity and gen_table.sub_table and gen_table.sub_table.columns:
                 sub_columns = gen_table.sub_table.columns or []
                 for sub_column in sub_columns:
                     if sub_column.column_type:
@@ -326,7 +397,10 @@ class Jinja2TemplateUtil:
         if has_time_import:
             import_list.add("from datetime import time")
 
-        return cls.merge_same_imports(list(import_list), "from sqlalchemy import")
+        merged = cls.merge_same_imports(list(import_list), "from sqlalchemy import")
+        if gen_table.sub or is_sub_entity:
+            merged.append("from sqlalchemy.orm import relationship")
+        return merged
 
     @classmethod
     def get_db_type(cls, column_type: str) -> str:
@@ -455,6 +529,49 @@ class Jinja2TemplateUtil:
         return f"{module_name}:{business_name}"
 
     @classmethod
+    def python_type_to_ts_type(cls, python_type: str | None) -> str:
+        """
+        将列上的 Python 类型（`get_db_type` + `DB_TO_PYTHON` 映射结果）转为前端 TS 类型片段。
+
+        与 JSON 序列化习惯一致：Decimal、日期时间多为字符串；dict/list 用宽松类型。
+        """
+        if not python_type or not str(python_type).strip():
+            return "string"
+        p = str(python_type).strip()
+        mapping: dict[str, str] = {
+            "int": "number",
+            "float": "number",
+            "bool": "boolean",
+            "Decimal": "string",
+            "date": "string",
+            "time": "string",
+            "datetime": "string",
+            "timedelta": "string",
+            "dict": "Record<string, unknown>",
+            "list": "unknown[]",
+            "bytes": "string",
+            "str": "string",
+        }
+        return mapping.get(p, "string")
+
+    @classmethod
+    def get_api_route_prefix(cls, module_name: str | None) -> str:
+        """
+        获取前端 API 路径首段，与 `discover` 中插件路由前缀一致（`module_xxx` → `xxx`）。
+
+        参数:
+        - module_name (str | None): 模块名，如 ``module_example``。
+
+        返回:
+        - str: 路由前缀，如 ``example``。
+        """
+        if not module_name:
+            return ""
+        if module_name.startswith("module_"):
+            return module_name[7:]
+        return module_name
+
+    @classmethod
     def get_sqlalchemy_type(cls, column: Any) -> str:
         """
         获取 SQLAlchemy 类型。
@@ -474,12 +591,22 @@ class Jinja2TemplateUtil:
             column_type = column.column_type or ""
             column_length = column.column_length or None
 
+        column_type = cls.normalize_db_column_type_for_mapping(column_type)
+
+        # MySQL：仅 tinyint(1) 映射为 Boolean；其余 tinyint 走 SmallInteger（见 GenConstant.DB_TO_SQLALCHEMY）
+        ct_norm = (column_type or "").strip()
+        if settings.DATABASE_TYPE != "postgres" and ct_norm:
+            ct_lower = ct_norm.lower()
+            if ct_lower.startswith("tinyint(1)"):
+                return "Boolean"
+
         # 首先尝试匹配完整类型（包括括号）
         sqlalchemy_type = StringUtil.get_mapping_value_by_key_ignore_case(
             GenConstant.DB_TO_SQLALCHEMY, column_type
         )
 
-        if sqlalchemy_type is None and "(" in column_type:
+        # get_mapping_value_by_key_ignore_case 未命中时返回 ""，须与 None 同样视为未匹配
+        if not sqlalchemy_type and "(" in column_type:
             # 如果没有匹配到，再尝试剥离括号
             column_type_list = column_type.split("(")
             col_type = column_type_list[0]
@@ -495,7 +622,7 @@ class Jinja2TemplateUtil:
             # 如果是Numeric类型且包含括号参数，保持原参数
             elif sqlalchemy_type == "Numeric":
                 sqlalchemy_type += "(" + column_type_list[1]
-        elif sqlalchemy_type is None:
+        elif not sqlalchemy_type:
             # 处理没有括号的类型
             col_type = column_type
             # 将 'character' 映射为 'char' 以匹配常量定义

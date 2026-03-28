@@ -23,7 +23,22 @@
               @visible-change="(visible) => onContextMenuVisibleChange(visible, tag)"
               @click.stop
             >
-              <span class="tag-text">{{ translateRouteTitle(tag.title) }}</span>
+              <span class="tag-main">
+                <button
+                  type="button"
+                  class="tag-bookmark-btn"
+                  :class="{ 'is-bookmarked': isQuickLinkExists(tag) }"
+                  :title="isQuickLinkExists(tag) ? '取消收藏' : '加入收藏'"
+                  :aria-label="isQuickLinkExists(tag) ? '取消收藏' : '加入收藏'"
+                  @click.prevent.stop="toggleQuickStart(tag)"
+                >
+                  <el-icon :size="14">
+                    <StarFilled v-if="isQuickLinkExists(tag)" />
+                    <Star v-else />
+                  </el-icon>
+                </button>
+                <span class="tag-text">{{ translateRouteTitle(tag.title) }}</span>
+              </span>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item @click="refreshSelectedTag(tag)">
@@ -72,15 +87,6 @@
                       <Minus />
                     </el-icon>
                     {{ t("navbar.closeAll") }}
-                  </el-dropdown-item>
-
-                  <!-- 收藏到快速开始 -->
-                  <el-dropdown-item divided @click="toggleQuickStart(tag)">
-                    <el-icon>
-                      <Star v-if="!isQuickLinkExists(tag)" />
-                      <StarFilled v-else />
-                    </el-icon>
-                    {{ isQuickLinkExists(tag) ? "取消收藏" : "收藏" }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -206,6 +212,13 @@ const scrollbarRef = ref();
 
 // 标签切换来源跟踪
 const tagSwitchSource = ref<"menu" | "tab" | null>(null);
+
+/** 收藏列表变更时递增，使星标与 localStorage 同步（否则取消收藏后 UI 不更新） */
+const quickLinksRevision = ref(0);
+
+const onQuickLinksChanged = () => {
+  quickLinksRevision.value++;
+};
 
 // 路由映射缓存，提升查找性能
 const routePathMap = new Map<string, TagView>();
@@ -577,18 +590,19 @@ const toggleQuickStart = (tag: TagView) => {
     const isExists = quickStartManager.isLinkExists(href);
 
     if (isExists) {
-      // 取消收藏：找到对应的链接并删除
       const links = quickStartManager.getQuickLinks();
       const targetLink = links.find((link) => link.href === href);
       if (targetLink?.id) {
         quickStartManager.removeQuickLink(targetLink.id);
-        ElMessage.success(`已取消收藏：${tag.title}`);
+      } else if (href) {
+        quickStartManager.removeQuickLinkByHref(href);
       }
+      ElMessage.success(`已取消收藏：${tag.title}`);
     } else {
-      // 添加收藏
       const quickLink = quickStartManager.createQuickLinkFromRoute(tag);
-      quickStartManager.addQuickLink(quickLink);
-      ElMessage.success(`已收藏：${tag.title}`);
+      if (quickStartManager.addQuickLink(quickLink)) {
+        ElMessage.success(`已收藏：${tag.title}`);
+      }
     }
   } catch (error) {
     console.error("Failed to toggle quick start:", error);
@@ -597,9 +611,10 @@ const toggleQuickStart = (tag: TagView) => {
 };
 
 /**
- * 检查快速链接是否已存在
+ * 检查快速链接是否已存在（依赖 quickLinksRevision，以便收藏增删后星标立即刷新）
  */
 const isQuickLinkExists = (tag: TagView): boolean => {
+  void quickLinksRevision.value;
   return quickStartManager.isLinkExists(tag.fullPath || tag.path);
 };
 
@@ -755,6 +770,8 @@ watch(
 onMounted(() => {
   initAffixTags();
 
+  quickStartManager.addListener(onQuickLinksChanged);
+
   // 初始化路由映射缓存
   updateRoutePathMap();
 
@@ -773,6 +790,7 @@ onMounted(() => {
 
 // 清理
 onUnmounted(() => {
+  quickStartManager.removeListener(onQuickLinksChanged);
   if (resizeObserver) {
     resizeObserver.disconnect();
   }
@@ -785,11 +803,10 @@ onUnmounted(() => {
   align-items: center;
   width: 100%;
   height: $tags-view-height;
-  /* 与 theme.ts layoutTagsBg 一致；介于顶栏与主内容之间的桥接层 */
-  background-color: var(--layout-tags-bg, var(--el-bg-color-overlay));
-  border-top: 1px solid var(--layout-tags-border);
-  border-bottom: 1px solid var(--layout-tags-border);
-  box-shadow: var(--el-box-shadow-light);
+  background-color: var(--el-bg-color-overlay);
+  border-top: 1px solid var(--el-border-color-light);
+  border-bottom: 1px solid var(--el-border-color-light);
+  // box-shadow: var(--el-box-shadow-light);
 
   .btn {
     display: flex;
@@ -797,16 +814,13 @@ onUnmounted(() => {
     justify-content: center;
     width: $tags-view-height;
     height: $tags-view-height;
+    color: var(--el-text-color-regular);
     cursor: pointer;
-    border: 1px solid var(--layout-tags-border);
+    border: none;
+    // border: 1px solid var(--el-border-color-light);
 
     &:hover {
       color: var(--el-color-primary);
-      background-color: var(--layout-tags-item-hover-bg, var(--layout-tags-item-bg));
-
-      .el-icon {
-        transform: scale(1.1);
-      }
     }
   }
 
@@ -824,26 +838,15 @@ onUnmounted(() => {
     display: inline-flex;
     align-items: center;
     height: 26px;
-    padding: 0 8px;
-    margin-left: 5px;
+    padding: 0 9px;
+    margin-left: 6px;
     font-size: 12px;
     line-height: 1;
     vertical-align: middle;
-    color: var(--layout-tags-item-text);
-    background: var(--layout-tags-item-bg);
-    border: 1px solid var(--layout-tags-border);
-    transition: all 0.2s ease;
-
-    /* 与激活态同宽占位，避免仅 active 有圆点导致整条标签行垂直错位 */
-    &::before {
-      flex-shrink: 0;
-      width: 8px;
-      height: 8px;
-      margin-right: 6px;
-      content: "";
-      background: transparent;
-      border-radius: 50%;
-    }
+    color: var(--el-text-color-regular);
+    background: var(--el-fill-color-light);
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 6px;
 
     &:first-of-type {
       margin-left: 5px;
@@ -853,17 +856,54 @@ onUnmounted(() => {
     }
 
     &:hover:not(.active) {
-      background-color: var(--layout-tags-item-hover-bg, var(--layout-tags-item-bg));
-      border-color: var(--layout-tags-item-hover-border, var(--layout-tags-border));
+      background-color: var(--el-fill-color);
+      border-color: var(--el-border-color);
     }
 
     :deep(.el-dropdown) {
       display: inline-flex;
       align-items: center;
+      max-width: 100%;
       line-height: 1;
     }
 
+    .tag-main {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .tag-bookmark-btn {
+      display: inline-flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin: 0;
+      line-height: 1;
+      color: var(--el-text-color-placeholder);
+      cursor: pointer;
+      outline: none;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+
+      &:hover {
+        color: var(--el-color-primary);
+      }
+
+      &:focus-visible {
+        box-shadow: 0 0 0 2px var(--el-color-primary-light-7);
+      }
+
+      &.is-bookmarked {
+        color: var(--el-color-primary);
+      }
+    }
+
     .tag-text {
+      min-width: 0;
       line-height: 1.25;
     }
 
@@ -879,30 +919,33 @@ onUnmounted(() => {
       color: var(--el-text-color-secondary);
       cursor: pointer;
       border-radius: 50%;
-      transition: all 0.2s ease;
 
       &:hover {
-        color: var(--el-color-white);
-        background-color: var(--el-text-color-placeholder);
+        color: var(--el-color-danger);
+        background-color: var(--el-fill-color-light);
       }
     }
 
     &.active {
-      background: var(--layout-tags-item-active-bg);
-      border-color: var(--el-color-primary);
-
-      &::before {
-        background: var(--el-color-primary);
-      }
+      color: var(--el-color-primary);
+      background: var(--el-color-primary-light-9);
+      border-color: var(--el-color-primary-light-7);
 
       .tag-text {
         font-weight: 500;
-        color: var(--layout-tags-item-active-text);
+        color: var(--el-color-primary);
+      }
+
+      .tag-bookmark-btn:not(.is-bookmarked) {
+        color: var(--el-text-color-secondary);
+
+        &:hover {
+          color: var(--el-color-primary);
+        }
       }
 
       .tag-close-btn {
         color: var(--el-color-primary);
-
         &:hover {
           color: var(--el-color-danger);
         }

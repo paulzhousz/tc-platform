@@ -218,7 +218,7 @@ defineExpose({
 
       &:focus-within {
         border-color: var(--el-color-primary);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 35%, transparent);
+        box-shadow: 0 0 0 1px var(--el-color-primary);
       }
 
       .message-input {
@@ -265,11 +265,11 @@ defineExpose({
           .send-button {
             flex-shrink: 0;
             border-radius: 50%;
-            box-shadow: 0 2px 8px color-mix(in srgb, var(--el-color-primary) 35%, transparent);
+            box-shadow: var(--el-box-shadow-light);
             transition: all 0.2s ease;
 
             &:hover {
-              box-shadow: 0 4px 14px color-mix(in srgb, var(--el-color-primary) 45%, transparent);
+              box-shadow: var(--el-box-shadow);
               transform: translateY(-1px);
             }
 

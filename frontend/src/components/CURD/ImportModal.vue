@@ -1,12 +1,11 @@
 <template>
-  <div>
+  <div class="curd-import-modal-host">
     <!-- 导入弹窗 -->
-    <el-dialog
+    <EnhancedDialog
       v-model="importModalVisible"
-      :align-center="true"
       :title="props.title"
       :width="props.width"
-      style="padding-right: 0"
+      dialog-class="curd-embed-dialog"
       @close="handleClose"
     >
       <!-- 滚动 -->
@@ -69,11 +68,12 @@
           </el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
   </div>
 </template>
 
 <script lang="ts" setup>
+import EnhancedDialog from "./EnhancedDialog.vue";
 import { ElMessage, type UploadUserFile } from "element-plus";
 import { ref, reactive } from "vue";
 import type { IContentConfig, IObject } from "./types";

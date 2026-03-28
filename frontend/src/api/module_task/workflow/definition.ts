@@ -1,8 +1,9 @@
 import request from "@/utils/request";
 
-const API_PATH = "/task/workflow";
+/** 对应后端 `plugin.module_task.workflow.definition` */
+const API_PATH = "/task/workflow/definition";
 
-const WorkflowAPI = {
+const WorkflowDefinitionAPI = {
   getWorkflowList(query: WorkflowPageQuery) {
     return request<ApiResponse<PageResult<WorkflowTable[]>>>({
       url: `${API_PATH}/list`,
@@ -59,8 +60,8 @@ const WorkflowAPI = {
   },
 };
 
-export default WorkflowAPI;
-export { WorkflowAPI };
+export default WorkflowDefinitionAPI;
+export { WorkflowDefinitionAPI };
 
 export interface WorkflowPageQuery extends PageQuery {
   name?: string;
@@ -92,7 +93,9 @@ export interface WorkflowForm extends BaseFormType {
   edges?: any[];
 }
 
-export interface WorkflowPublishForm {}
+export interface WorkflowPublishForm {
+  remark?: string;
+}
 
 export interface WorkflowExecuteForm {
   workflow_id: number;
@@ -109,4 +112,5 @@ export interface WorkflowExecuteResult {
   end_time?: string;
   variables?: Record<string, any>;
   node_results?: Record<string, any>;
+  error?: string;
 }

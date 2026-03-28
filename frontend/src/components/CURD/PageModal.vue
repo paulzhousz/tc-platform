@@ -66,9 +66,12 @@
     </template>
     <!-- dialog -->
     <template v-else>
-      <el-dialog
+      <EnhancedDialog
         v-model="modalVisible"
-        v-bind="{ destroyOnClose: true, alignCenter: true, ...modalConfig.dialog }"
+        :title="String(modalConfig.dialog?.title ?? '')"
+        :width="modalConfig.dialog?.width ?? '600px'"
+        :draggable="modalConfig.dialog?.draggable !== false"
+        v-bind="dialogRestAttrs"
         @close="handleClose"
       >
         <el-form ref="formRef" v-bind="modalConfig.form" :model="formData" :rules="formRules">
@@ -127,17 +130,19 @@
           <el-button v-if="!formDisable" type="primary" @click="handleSubmit">确 定</el-button>
           <el-button @click="handleClose">{{ !formDisable ? "取 消" : "关闭" }}</el-button>
         </template>
-      </el-dialog>
+      </EnhancedDialog>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, markRaw, onMounted, reactive, ref } from "vue";
 import { useThrottleFn } from "@vueuse/core";
 import type { FormInstance, FormRules } from "element-plus";
 import type { IComponentType, IModalConfig, IObject } from "./types";
 import InputTag from "@/components/InputTag/index.vue";
 import IconSelect from "@/components/IconSelect/index.vue";
+import EnhancedDialog from "./EnhancedDialog.vue";
 
 defineSlots<{ [key: string]: (_args: any) => any }>();
 // 定义接收的属性
@@ -173,6 +178,12 @@ const childrenMap = new Map<IComponentType, any>([
 ]);
 
 const pk = props.modalConfig.pk ?? "id"; // 主键名，用于表单数据处理
+
+const dialogRestAttrs = computed(() => {
+  const d = props.modalConfig.dialog ?? {};
+  const { title: _t, width: _w, draggable: _d, ...rest } = d;
+  return { destroyOnClose: true, ...rest };
+});
 const modalVisible = ref(false); // 弹窗显示状态
 const formRef = ref<FormInstance>(); // 表单实例
 const formItems = reactive(props.modalConfig.formItems ?? []); // 表单配置项

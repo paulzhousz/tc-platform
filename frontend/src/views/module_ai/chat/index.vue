@@ -302,7 +302,7 @@ onUnmounted(disconnectWebSocket);
 <style lang="scss" scoped>
 .main-chat {
   /* L2 内容面：与 AppMain 的 L0 画布（留白/间隙）区分开，避免与 gap 同色 */
-  --chat-area-bg: var(--layout-content-surface-bg, var(--el-bg-color-overlay));
+  --chat-area-bg: var(--el-bg-color-overlay);
 
   height: 100%;
   overflow: hidden;

@@ -67,9 +67,7 @@ const isLogoCollapsed = computed(() => width.value < 768);
     justify-content: space-between;
     width: 100%;
     height: $navbar-height;
-    color: var(--layout-header-text);
-    background-color: var(--layout-header-bg);
-    border-bottom: 1px solid var(--layout-header-border);
+    background-color: var(--layout-header-bg, var(--menu-background));
 
     &-left {
       display: flex;
@@ -126,11 +124,11 @@ const isLogoCollapsed = computed(() => width.value < 768);
 
           &.has-active-child {
             .el-sub-menu__title {
-              color: var(--layout-menu-active-text) !important;
-              border-bottom: 2px solid var(--layout-menu-active-text) !important;
+              color: var(--el-color-primary) !important;
+              border-bottom: 2px solid var(--el-color-primary) !important;
 
               .menu-icon {
-                color: var(--layout-menu-active-text) !important;
+                color: var(--el-color-primary) !important;
               }
             }
           }
@@ -154,7 +152,6 @@ const isLogoCollapsed = computed(() => width.value < 768);
   &__main {
     height: calc(100vh - $navbar-height);
     overflow-y: auto;
-    background-color: var(--layout-content-canvas, var(--layout-content-bg));
   }
 }
 

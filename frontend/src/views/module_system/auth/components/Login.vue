@@ -559,13 +559,13 @@ function toOtherForm(type: "register" | "resetPwd") {
       background-color: var(--el-fill-color-lighter);
       border: 2px solid var(--el-border-color-light);
       border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      box-shadow: var(--el-box-shadow-light);
       transition: all 0.3s ease;
 
       &:hover {
         background-color: var(--el-color-primary-light-9);
         border-color: var(--el-color-primary);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--el-box-shadow);
         transform: translateY(-2px);
       }
 

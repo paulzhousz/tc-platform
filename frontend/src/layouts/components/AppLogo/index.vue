@@ -36,7 +36,7 @@ defineProps({
     text-overflow: ellipsis;
     font-size: 14px;
     font-weight: bold;
-    color: var(--layout-logo-text);
+    color: $sidebar-logo-text-color;
     white-space: nowrap;
   }
 }
@@ -50,7 +50,7 @@ defineProps({
     background-color: transparent !important;
 
     .title {
-      color: var(--layout-logo-text);
+      color: var(--menu-text);
     }
   }
 }

@@ -209,8 +209,11 @@ import "element-plus/dist/index.css";
 import DynamicNode from "./DynamicNode.vue";
 import NodeConfigPanel from "./NodeConfigPanel.vue";
 import EdgeConfigPanel from "./EdgeConfigPanel.vue";
-import NodeAPI from "@/api/module_task/node";
-import WorkflowAPI, { type WorkflowTable, type WorkflowForm } from "@/api/module_task/workflow";
+import WorkflowDefinitionAPI, {
+  type WorkflowTable,
+  type WorkflowForm,
+} from "@/api/module_task/workflow/definition";
+import WorkflowNodeTypeAPI from "@/api/module_task/workflow/node-type";
 
 defineOptions({
   name: "WorkflowCreateDrawer",
@@ -477,7 +480,7 @@ const getEdges = () =>
 const loadNodeTypes = async () => {
   loading.value = true;
   try {
-    const res = await NodeAPI.getNodeTypeOptions();
+    const res = await WorkflowNodeTypeAPI.getWorkflowNodeTypeOptions();
     if (res.data && res.data.data) {
       allNodes.value = res.data.data.map((nodeType: any) => ({
         id: nodeType.id,
@@ -509,7 +512,7 @@ onMounted(() => {
 onInit((vueFlowInstance) => {
   vueFlowInstance.fitView();
   if (workflowId.value) {
-    WorkflowAPI.getWorkflowDetail(workflowId.value)
+    WorkflowDefinitionAPI.getWorkflowDetail(workflowId.value)
       .then((res) => {
         if (res.data && res.data.data) {
           nodes.value = res.data.data.nodes || [];
@@ -696,9 +699,9 @@ function handleSave() {
   };
 
   if (workflowId.value) {
-    return WorkflowAPI.updateWorkflow(workflowId.value, saveData as WorkflowForm);
+    return WorkflowDefinitionAPI.updateWorkflow(workflowId.value, saveData as WorkflowForm);
   } else {
-    return WorkflowAPI.createWorkflow(saveData as WorkflowForm).then((res) => {
+    return WorkflowDefinitionAPI.createWorkflow(saveData as WorkflowForm).then((res) => {
       if (res.data && res.data.data) {
         workflowId.value = res.data.data.id;
       }

@@ -1,151 +1,34 @@
 <!-- 用户管理 -->
 <template>
   <div class="app-container">
-    <el-row :gutter="12" justify="space-around">
-      <!-- 部门树 -->
-      <el-col :span="4">
-        <DeptTree v-model="queryFormData.dept_id" class="h-820px" @node-click="handleQuery" />
+    <el-row class="page-row" :gutter="12" justify="start">
+      <el-col :span="4" class="dept-col">
+        <DeptTree v-model="deptFilterId" class="w-full h-full" @node-click="handleDeptNodeClick" />
       </el-col>
 
-      <!-- 用户列表 -->
-      <el-col :span="20">
-        <el-card class="data-table">
-          <template #header>
-            <div class="card-header">
-              <span>
-                <el-tooltip content="用户管理系统用户">
-                  <QuestionFilled class="w-4 h-4 mx-1" />
-                </el-tooltip>
-                用户列表
-              </span>
-            </div>
-            <!-- 搜索区域 -->
-            <div class="search-container">
-              <el-form
-                ref="queryFormRef"
-                :model="queryFormData"
-                :inline="true"
-                label-suffix=":"
-                @submit.prevent="handleQuery"
-              >
-                <el-form-item prop="username" label="账号">
-                  <el-input v-model="queryFormData.username" placeholder="请输入账号" clearable />
-                </el-form-item>
-                <el-form-item prop="name" label="用户名">
-                  <el-input v-model="queryFormData.name" placeholder="请输入用户名" clearable />
-                </el-form-item>
-                <el-form-item prop="status" label="状态">
-                  <el-select
-                    v-model="queryFormData.status"
-                    placeholder="请选择状态"
-                    style="width: 167.5px"
-                    clearable
-                  >
-                    <el-option value="0" label="启用" />
-                    <el-option value="1" label="停用" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item v-if="isExpand" prop="created_id" label="创建人">
-                  <UserTableSelect
-                    v-model="queryFormData.created_id"
-                    @confirm-click="handleConfirm"
-                    @clear-click="handleQuery"
-                  />
-                </el-form-item>
-                <!-- 查询、重置、展开/收起按钮 -->
-                <el-form-item class="search-buttons">
-                  <el-button
-                    v-hasPerm="['module_system:user:query']"
-                    type="primary"
-                    icon="search"
-                    native-type="submit"
-                  >
-                    查询
-                  </el-button>
-                  <el-button
-                    v-hasPerm="['module_system:user:query']"
-                    icon="refresh"
-                    @click="handleResetQuery"
-                  >
-                    重置
-                  </el-button>
-                  <!-- 展开/收起 -->
-                  <template v-if="isExpandable">
-                    <el-link
-                      class="ml-3"
-                      type="primary"
-                      underline="never"
-                      @click="isExpand = !isExpand"
-                    >
-                      {{ isExpand ? "收起" : "展开" }}
-                      <el-icon>
-                        <template v-if="isExpand">
-                          <ArrowUp />
-                        </template>
-                        <template v-else>
-                          <ArrowDown />
-                        </template>
-                      </el-icon>
-                    </el-link>
-                  </template>
-                </el-form-item>
-              </el-form>
-            </div>
-          </template>
+      <el-col :span="20" class="right-col">
+        <PageSearch
+          ref="searchRef"
+          :search-config="searchConfig"
+          @query-click="handleQueryClick"
+          @reset-click="handleResetClick"
+        />
 
-          <!-- 功能区域 -->
-          <div class="data-table__toolbar">
-            <div class="data-table__toolbar--left">
-              <el-row :gutter="10">
-                <el-col :span="1.5">
-                  <el-button
-                    v-hasPerm="['module_system:user:create']"
-                    type="success"
-                    icon="plus"
-                    @click="handleOpenDialog('create')"
-                  >
-                    新增
-                  </el-button>
-                </el-col>
-                <el-col :span="1.5">
-                  <el-button
-                    v-hasPerm="['module_system:user:delete']"
-                    type="danger"
-                    icon="delete"
-                    :disabled="selectIds.length === 0"
-                    :loading="submitLoading"
-                    @click="handleDelete(selectIds)"
-                  >
-                    批量删除
-                  </el-button>
-                </el-col>
-                <el-col :span="1.5">
-                  <el-dropdown v-hasPerm="['module_system:user:patch']" trigger="click">
-                    <el-button
-                      type="default"
-                      :disabled="selectIds.length === 0 || submitLoading"
-                      icon="ArrowDown"
-                    >
-                      更多
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item icon="Check" @click="handleMoreClick('0')">
-                          批量启用
-                        </el-dropdown-item>
-                        <el-dropdown-item icon="CircleClose" @click="handleMoreClick('1')">
-                          批量停用
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                </el-col>
-              </el-row>
-            </div>
-
+        <PageContent ref="contentRef" class="flex-1 min-h-0" :content-config="contentConfig">
+          <template #toolbar="{ toolbarRight, onToolbar, removeIds, cols }">
+            <CrudToolbarLeft
+              :remove-ids="removeIds"
+              :perm-create="['module_system:user:create']"
+              :perm-delete="['module_system:user:delete']"
+              :perm-patch="['module_system:user:patch']"
+              :delete-loading="submitLoading"
+              @add="handleOpenDialog('create')"
+              @delete="onToolbar('delete')"
+              @more="handleMoreClick"
+            />
             <div class="data-table__toolbar--right">
-              <el-row :gutter="10">
-                <el-col :span="1.5">
+              <CrudToolbarRight :buttons="toolbarRight" :cols="cols" :on-toolbar="onToolbar">
+                <template #prepend>
                   <el-tooltip content="导入">
                     <el-button
                       v-hasPerm="['module_system:user:import']"
@@ -155,8 +38,6 @@
                       @click="handleOpenImportDialog"
                     />
                   </el-tooltip>
-                </el-col>
-                <el-col :span="1.5">
                   <el-tooltip content="导出">
                     <el-button
                       v-hasPerm="['module_system:user:export']"
@@ -166,148 +47,126 @@
                       @click="handleOpenExportsModal"
                     />
                   </el-tooltip>
-                </el-col>
-                <el-col :span="1.5">
-                  <el-tooltip content="刷新">
-                    <el-button
-                      v-hasPerm="['module_system:user:query']"
-                      type="default"
-                      icon="refresh"
-                      circle
-                      @click="handleRefresh"
-                    />
-                  </el-tooltip>
-                </el-col>
-              </el-row>
+                </template>
+              </CrudToolbarRight>
             </div>
-          </div>
-
-          <!-- 表格区域 -->
-          <div class="data-table__content">
-            <el-table
-              ref="dataTableRef"
-              v-loading="loading"
-              :data="pageTableData"
-              height="calc(100vh - 445px)"
-              max-height="calc(100vh - 445px)"
-              border
-              stripe
-              @selection-change="handleSelectionChange"
-            >
-              <template #empty>
-                <el-empty :image-size="80" description="暂无数据" />
-              </template>
-              <el-table-column type="selection" min-width="55" align="center" />
-              <el-table-column type="index" fixed label="序号" min-width="60">
-                <template #default="scope">
-                  {{ (queryFormData.page_no - 1) * queryFormData.page_size + scope.$index + 1 }}
-                </template>
-              </el-table-column>
-              <el-table-column label="头像" prop="avatar" min-width="80" align="center">
-                <template #default="scope">
-                  <template v-if="scope.row.avatar">
-                    <el-avatar size="small" :src="scope.row.avatar" />
-                  </template>
-                  <template v-else>
-                    <el-avatar size="small" icon="UserFilled" />
-                  </template>
-                </template>
-              </el-table-column>
-              <el-table-column label="账号" prop="username" min-width="100" />
-              <el-table-column label="用户名" prop="name" min-width="100" />
-              <el-table-column label="状态" prop="status" min-width="100">
-                <template #default="scope">
-                  <el-tag :type="scope.row.status === '0' ? 'success' : 'danger'">
-                    {{ scope.row.status === "0" ? "启用" : "停用" }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="部门" prop="dept" min-width="100">
-                <template #default="scope">
-                  {{ scope.row.dept ? scope.row.dept.name : "" }}
-                </template>
-              </el-table-column>
-              <el-table-column label="性别" prop="gender" min-width="100">
-                <template #default="scope">
-                  <el-tag v-if="scope.row.gender === '0'" type="success">男</el-tag>
-                  <el-tag v-else-if="scope.row.gender === '1'" type="warning">女</el-tag>
-                  <el-tag v-else type="info">未知</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="创建时间" prop="created_time" min-width="160" />
-              <el-table-column label="更新时间" prop="updated_time" min-width="160" />
-              <el-table-column fixed="right" label="操作" align="center" min-width="280">
-                <template #default="scope">
-                  <el-button
-                    v-hasPerm="['module_system:user:update']"
-                    type="warning"
-                    icon="RefreshLeft"
-                    size="small"
-                    link
-                    :disabled="scope.row.is_superuser === true"
-                    @click="hancleResetPassword(scope.row)"
-                  >
-                    重置密码
-                  </el-button>
-                  <el-button
-                    v-hasPerm="['module_system:user:detail']"
-                    type="info"
-                    size="small"
-                    link
-                    icon="document"
-                    @click="handleOpenDialog('detail', scope.row.id)"
-                  >
-                    详情
-                  </el-button>
-                  <el-button
-                    v-hasPerm="['module_system:user:update']"
-                    type="primary"
-                    size="small"
-                    link
-                    icon="edit"
-                    :disabled="scope.row.is_superuser === true"
-                    @click="handleOpenDialog('update', scope.row.id)"
-                  >
-                    编辑
-                  </el-button>
-                  <el-button
-                    v-hasPerm="['module_system:user:delete']"
-                    type="danger"
-                    size="small"
-                    link
-                    icon="delete"
-                    :disabled="scope.row.is_superuser === true"
-                    @click="handleDelete([scope.row.id])"
-                  >
-                    删除
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-
-          <!-- 分页区域 -->
-          <template #footer>
-            <pagination
-              v-model:total="total"
-              v-model:page="queryFormData.page_no"
-              v-model:limit="queryFormData.page_size"
-              @pagination="loadingData"
-            />
           </template>
-        </el-card>
+
+          <template #table="{ data, loading, tableRef, onSelectionChange, pagination }">
+            <div class="data-table__content">
+              <el-table
+                :ref="tableRef as any"
+                v-loading="loading"
+                row-key="id"
+                :data="data"
+                height="100%"
+                border
+                stripe
+                @selection-change="onSelectionChange"
+              >
+                <template #empty>
+                  <el-empty :image-size="80" description="暂无数据" />
+                </template>
+                <el-table-column type="selection" min-width="55" align="center" />
+                <el-table-column fixed label="序号" min-width="60">
+                  <template #default="scope">
+                    {{ (pagination.currentPage - 1) * pagination.pageSize + scope.$index + 1 }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="头像" prop="avatar" min-width="80" align="center">
+                  <template #default="scope">
+                    <template v-if="scope.row.avatar">
+                      <el-avatar size="small" :src="scope.row.avatar" />
+                    </template>
+                    <template v-else>
+                      <el-avatar size="small" icon="UserFilled" />
+                    </template>
+                  </template>
+                </el-table-column>
+                <el-table-column label="账号" prop="username" min-width="100" />
+                <el-table-column label="用户名" prop="name" min-width="100" />
+                <el-table-column label="状态" prop="status" min-width="100">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.status === '0' ? 'success' : 'danger'">
+                      {{ scope.row.status === "0" ? "启用" : "停用" }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="部门" prop="dept" min-width="100">
+                  <template #default="scope">
+                    {{ scope.row.dept ? scope.row.dept.name : "" }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="性别" prop="gender" min-width="100">
+                  <template #default="scope">
+                    <el-tag v-if="scope.row.gender === '0'" type="success">男</el-tag>
+                    <el-tag v-else-if="scope.row.gender === '1'" type="warning">女</el-tag>
+                    <el-tag v-else type="info">未知</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="创建时间" prop="created_time" min-width="160" />
+                <el-table-column label="更新时间" prop="updated_time" min-width="160" />
+                <el-table-column label="操作" fixed="right" align="center" min-width="280">
+                  <template #default="scope">
+                    <el-button
+                      v-hasPerm="['module_system:user:update']"
+                      type="warning"
+                      icon="RefreshLeft"
+                      size="small"
+                      link
+                      :disabled="scope.row.is_superuser === true"
+                      @click="hancleResetPassword(scope.row)"
+                    >
+                      重置密码
+                    </el-button>
+                    <el-button
+                      v-hasPerm="['module_system:user:detail']"
+                      type="info"
+                      size="small"
+                      link
+                      icon="View"
+                      @click="handleOpenDialog('detail', scope.row.id)"
+                    >
+                      详情
+                    </el-button>
+                    <el-button
+                      v-hasPerm="['module_system:user:update']"
+                      type="primary"
+                      size="small"
+                      link
+                      icon="edit"
+                      :disabled="scope.row.is_superuser === true"
+                      @click="handleOpenDialog('update', scope.row.id)"
+                    >
+                      编辑
+                    </el-button>
+                    <el-button
+                      v-hasPerm="['module_system:user:delete']"
+                      type="danger"
+                      size="small"
+                      link
+                      icon="delete"
+                      :disabled="scope.row.is_superuser === true"
+                      @click="handleRowDelete(scope.row.id)"
+                    >
+                      删除
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </template>
+        </PageContent>
       </el-col>
     </el-row>
 
-    <!-- 弹窗区域 -->
-    <el-drawer
+    <EnhancedDrawer
       v-model="dialogVisible.visible"
       :title="dialogVisible.title"
       append-to-body
       :size="drawerSize"
       @close="handleCloseDialog"
     >
-      <!-- 详情 -->
       <template v-if="dialogVisible.type === 'detail'">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="编号" :span="2">
@@ -359,8 +218,8 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="状态" :span="2">
-            <el-tag :type="detailFormData.status ? 'success' : 'danger'">
-              {{ detailFormData.status ? "启用" : "停用" }}
+            <el-tag :type="detailFormData.status === '0' ? 'success' : 'danger'">
+              {{ detailFormData.status === "0" ? "启用" : "停用" }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="上次登录时间" :span="2">
@@ -383,7 +242,6 @@
           </el-descriptions-item>
         </el-descriptions>
       </template>
-      <!-- 新增、编辑表单 -->
       <template v-else>
         <el-form
           ref="dataFormRef"
@@ -493,6 +351,7 @@
 
       <template #footer>
         <div class="dialog-footer">
+          <el-button @click="handleCloseDialog">取消</el-button>
           <el-button
             v-if="dialogVisible.type === 'create' || dialogVisible.type === 'update'"
             type="primary"
@@ -502,12 +361,10 @@
             确定
           </el-button>
           <el-button v-else type="primary" @click="handleCloseDialog">确定</el-button>
-          <el-button @click="handleCloseDialog">取消</el-button>
         </div>
       </template>
-    </el-drawer>
+    </EnhancedDrawer>
 
-    <!-- 导入弹窗 -->
     <ImportModal
       v-model="importDialogVisible"
       :content-config="curdContentConfig"
@@ -515,13 +372,12 @@
       @upload="handleUpload"
     />
 
-    <!-- 导出弹窗 -->
     <ExportModal
       v-model="exportsDialogVisible"
       :content-config="curdContentConfig"
-      :query-params="queryFormData"
-      :page-data="pageTableData"
-      :selection-data="selectionRows"
+      :query-params="exportQueryParams"
+      :page-data="exportPageData"
+      :selection-data="exportSelectionData"
     />
   </div>
 </template>
@@ -551,52 +407,180 @@ import UserTableSelect from "./components/UserTableSelect.vue";
 import { useUserStore } from "@/store";
 import ImportModal from "@/components/CURD/ImportModal.vue";
 import ExportModal from "@/components/CURD/ExportModal.vue";
-import type { IContentConfig } from "@/components/CURD/types";
-import { QuestionFilled, ArrowUp, ArrowDown } from "@element-plus/icons-vue";
+import CrudToolbarLeft from "@/components/CURD/CrudToolbarLeft.vue";
+import CrudToolbarRight from "@/components/CURD/CrudToolbarRight.vue";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDrawer from "@/components/CURD/EnhancedDrawer.vue";
+import type { IContentConfig, ISearchConfig } from "@/components/CURD/types";
+import { ref, reactive, computed, markRaw, nextTick, unref } from "vue";
+import { fetchAllPages } from "@/utils/fetchAllPages";
 
 const appStore = useAppStore();
 
-const queryFormRef = ref();
+const searchRef = ref<InstanceType<typeof PageSearch>>();
+const contentRef = ref<InstanceType<typeof PageContent>>();
 const dataFormRef = ref();
-const total = ref(0);
-const loading = ref(false);
 const submitLoading = ref(false);
 const uploadLoading = ref(false);
-const isExpand = ref(false);
-const isExpandable = ref(true);
+const deptFilterId = ref<number | undefined>(undefined);
+
 const drawerSize = computed(() => (appStore.device === DeviceEnum.DESKTOP ? "450px" : "90%"));
-const selectionRows = ref<UserInfo[]>([]);
-// 选中的用户ID
-const selectIds = ref<number[]>([]);
-// 部门下拉数据源
 const deptOptions = ref<OptionType[]>();
-// 角色下拉数据源
 const roleOptions = ref<Array<{ value: number; label: string; disabled?: boolean }>>();
-// 岗位下拉数据源
 const positionOptions = ref<Array<{ value: number; label: string; disabled?: boolean }>>();
-// 导入弹窗显示状态
 const importDialogVisible = ref(false);
-// 导出弹窗显示状态
 const exportsDialogVisible = ref(false);
-// 分页表单
-const pageTableData = ref<UserInfo[]>([]);
-// 详情表单
 const detailFormData = ref<UserInfo>({});
 
-// 分页查询参数
-const queryFormData = reactive<UserPageQuery>({
-  page_no: 1,
-  page_size: 10,
-  username: undefined,
-  name: undefined,
-  status: undefined,
-  dept_id: undefined,
-  created_time: undefined,
-  created_id: undefined,
-  updated_id: undefined,
+function triggerUserSearch() {
+  nextTick(() => {
+    contentRef.value?.fetchPageData(getMergedListParams(), true);
+  });
+}
+
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_system:user",
+  colon: true,
+  isExpandable: true,
+  showNumber: 3,
+  form: { labelWidth: "auto" },
+  formItems: [
+    {
+      prop: "username",
+      label: "账号",
+      type: "input",
+      attrs: { placeholder: "请输入账号", clearable: true },
+    },
+    {
+      prop: "name",
+      label: "用户名",
+      type: "input",
+      attrs: { placeholder: "请输入用户名", clearable: true },
+    },
+    {
+      prop: "status",
+      label: "状态",
+      type: "select",
+      options: [
+        { label: "启用", value: "0" },
+        { label: "停用", value: "1" },
+      ],
+      attrs: { placeholder: "请选择状态", clearable: true, style: { width: "167.5px" } },
+    },
+    {
+      prop: "created_id",
+      label: "创建人",
+      type: "user-table-select",
+      initialValue: null,
+      events: {
+        "confirm-click": triggerUserSearch,
+        "clear-click": triggerUserSearch,
+      },
+    },
+  ],
+  customComponents: {
+    "user-table-select": markRaw(UserTableSelect),
+  },
 });
 
-// 表单
+const contentCols = reactive<
+  Array<{
+    prop?: string;
+    label?: string;
+    show?: boolean;
+  }>
+>([
+  { prop: "selection", label: "选择框", show: true },
+  { prop: "index", label: "序号", show: true },
+  { prop: "avatar", label: "头像", show: true },
+  { prop: "username", label: "账号", show: true },
+  { prop: "name", label: "用户名", show: true },
+  { prop: "status", label: "状态", show: true },
+  { prop: "dept", label: "部门", show: true },
+  { prop: "gender", label: "性别", show: true },
+  { prop: "created_time", label: "创建时间", show: true },
+  { prop: "updated_time", label: "更新时间", show: true },
+  { prop: "operation", label: "操作", show: true },
+]);
+
+const contentConfig = reactive<IContentConfig<UserPageQuery>>({
+  permPrefix: "module_system:user",
+  pk: "id",
+  cols: contentCols as IContentConfig["cols"],
+  hideColumnFilter: true,
+  initialFetch: false,
+  toolbar: [],
+  defaultToolbar: [{ name: "refresh", perm: "query" }],
+  pagination: {
+    pageSize: 10,
+    pageSizes: [10, 20, 30, 50],
+  },
+  request: { page_no: "page_no", page_size: "page_size" },
+  indexAction: async (params) => {
+    const res = await UserAPI.listUser(params as UserPageQuery);
+    return {
+      total: res.data.data.total,
+      list: res.data.data.items,
+    };
+  },
+  deleteAction: async (ids) => {
+    await UserAPI.deleteUser(
+      ids
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n))
+    );
+    const userStore = useUserStore();
+    const idSet = ids.split(",").map((s) => Number(s.trim()));
+    if (userStore.basicInfo.id && idSet.includes(userStore.basicInfo.id)) {
+      userStore.clearUserInfo();
+    }
+  },
+  deleteConfirm: {
+    title: "警告",
+    message: "确认删除该项数据?",
+    type: "warning",
+  },
+});
+
+function getMergedListParams(): UserPageQuery {
+  const base = searchRef.value?.getQueryParams() ?? {};
+  return {
+    ...base,
+    dept_id: deptFilterId.value,
+  } as UserPageQuery;
+}
+
+function handleQueryClick() {
+  contentRef.value?.fetchPageData(getMergedListParams(), true);
+}
+
+function handleResetClick() {
+  deptFilterId.value = undefined;
+  contentRef.value?.fetchPageData(getMergedListParams(), true);
+}
+
+function handleDeptNodeClick() {
+  contentRef.value?.fetchPageData(getMergedListParams(), true);
+}
+
+function refreshList() {
+  contentRef.value?.fetchPageData(getMergedListParams(), true);
+}
+
+function handleRowDelete(id: number) {
+  contentRef.value?.handleDelete(id);
+}
+
+const exportQueryParams = computed(() => getMergedListParams());
+
+const exportPageData = computed(() => (unref(contentRef.value?.pageData) ?? []) as UserInfo[]);
+
+const exportSelectionData = computed(
+  () => (contentRef.value?.getSelectionData() ?? []) as UserInfo[]
+);
+
 const formData = reactive<UserForm>({
   id: undefined,
   username: undefined,
@@ -611,19 +595,17 @@ const formData = reactive<UserForm>({
   gender: undefined,
   email: undefined,
   mobile: undefined,
-  is_superuser: false, //默认不是超管
+  is_superuser: false,
   status: "0",
   description: undefined,
 });
 
-// 弹窗状态
 const dialogVisible = reactive({
   title: "",
   visible: false,
   type: "create" as "create" | "update" | "detail",
 });
 
-// 表单验证规则
 const rules = reactive({
   username: [{ required: true, message: "请输入账号", trigger: "blur" }],
   name: [{ required: true, message: "请输入用户名", trigger: "blur" }],
@@ -647,10 +629,6 @@ const rules = reactive({
   status: [{ required: true, message: "请选择状态", trigger: "blur" }],
 });
 
-// 日期范围临时变量
-const dateRange = ref<[Date, Date] | []>([]);
-
-// 仅用于导出字段的列（排除非数据列及嵌套对象列）
 const exportColumns = [
   { prop: "username", label: "账号" },
   { prop: "name", label: "名称" },
@@ -664,114 +642,29 @@ const exportColumns = [
   { prop: "updated_time", label: "更新时间" },
 ];
 
-// 导入/导出配置
 const curdContentConfig = {
   permPrefix: "module_system:user",
-  cols: exportColumns as any,
+  cols: exportColumns as unknown as IContentConfig["cols"],
   importTemplate: () => UserAPI.downloadTemplateUser(),
-  exportsAction: async (params: any) => {
-    const query: any = { ...params };
+  exportsAction: async (params: Record<string, unknown>) => {
+    const query: Record<string, unknown> = { ...params };
     if (typeof query.status === "string") {
       query.status = query.status === "true";
     }
-    query.page_no = 1;
-    query.page_size = 9999;
-    const all: any[] = [];
-    while (true) {
-      const res = await UserAPI.listUser(query);
-      const items = res.data?.data?.items || [];
-      const total = res.data?.data?.total || 0;
-      all.push(...items);
-      if (all.length >= total || items.length === 0) break;
-      query.page_no += 1;
-    }
-    return all;
+    return fetchAllPages<UserInfo>({
+      pageSize: 9999,
+      initialQuery: query,
+      fetchPage: async (q) => {
+        const res = await UserAPI.listUser(q as unknown as UserPageQuery);
+        return {
+          total: res.data?.data?.total ?? 0,
+          list: res.data?.data?.items ?? [],
+        };
+      },
+    });
   },
 } as unknown as IContentConfig;
 
-// 选择创建人后触发查询
-function handleConfirm() {
-  handleQuery();
-}
-
-// 列表刷新
-async function handleRefresh() {
-  await loadingData();
-}
-
-// 加载表格数据
-async function loadingData() {
-  loading.value = true;
-  try {
-    const response = await UserAPI.listUser(queryFormData);
-    pageTableData.value = response.data.data.items;
-    total.value = response.data.data.total;
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-// 查询（重置页码后获取数据）
-async function handleQuery() {
-  queryFormData.page_no = 1;
-  loadingData();
-}
-
-// 重置查询
-async function handleResetQuery() {
-  // 重置表单字段
-  queryFormRef.value.resetFields();
-  // 额外清空不在 model 内的扩展查询项（如日期范围）
-  dateRange.value = [];
-  queryFormData.created_time = undefined;
-  // 清空部门并重置页码
-  queryFormData.dept_id = undefined;
-  // 清空创建人
-  queryFormData.created_id = undefined;
-  queryFormData.page_no = 1;
-  // 重新加载数据
-  loadingData();
-}
-
-// 定义初始表单数据常量
-const initialFormData: UserForm = {
-  id: undefined,
-  username: undefined,
-  name: undefined,
-  dept_id: undefined,
-  dept_name: undefined,
-  role_ids: undefined,
-  role_names: undefined,
-  position_ids: undefined,
-  position_names: undefined,
-  password: undefined,
-  gender: undefined,
-  email: undefined,
-  mobile: undefined,
-  is_superuser: false, //默认不是超管
-  status: "0",
-  description: undefined,
-};
-
-// 重置表单
-async function resetForm() {
-  if (dataFormRef.value) {
-    dataFormRef.value.resetFields();
-    dataFormRef.value.clearValidate();
-  }
-  // 完全重置 formData 为初始状态
-  Object.assign(formData, initialFormData);
-}
-
-// 选中项发生变化
-async function handleSelectionChange(selection: any) {
-  selectIds.value = selection.map((item: any) => item.id);
-  selectionRows.value = selection;
-}
-
-// 重置密码
 function hancleResetPassword(row: UserInfo) {
   ElMessageBox.prompt("请输入用户【" + row.username + "】的新密码", "重置密码", {
     confirmButtonText: "确定",
@@ -790,13 +683,38 @@ function hancleResetPassword(row: UserInfo) {
   );
 }
 
-// 关闭弹窗
-async function handleCloseDialog() {
-  dialogVisible.visible = false;
-  resetForm();
+async function resetForm() {
+  if (dataFormRef.value) {
+    dataFormRef.value.resetFields();
+    dataFormRef.value.clearValidate();
+  }
+  Object.assign(formData, initialFormData);
 }
 
-// 打开弹窗
+async function handleCloseDialog() {
+  dialogVisible.visible = false;
+  await resetForm();
+}
+
+const initialFormData: UserForm = {
+  id: undefined,
+  username: undefined,
+  name: undefined,
+  dept_id: undefined,
+  dept_name: undefined,
+  role_ids: undefined,
+  role_names: undefined,
+  position_ids: undefined,
+  position_names: undefined,
+  password: undefined,
+  gender: undefined,
+  email: undefined,
+  mobile: undefined,
+  is_superuser: false,
+  status: "0",
+  description: undefined,
+};
+
 async function handleOpenDialog(type: "create" | "update" | "detail", id?: number) {
   dialogVisible.type = type;
   if (id) {
@@ -807,7 +725,6 @@ async function handleOpenDialog(type: "create" | "update" | "detail", id?: numbe
     } else if (type === "update") {
       dialogVisible.title = "修改用户";
       Object.assign(formData, response.data.data);
-      // 确保角色和岗位ID正确设置
       formData.role_ids = (response.data.data.roles || []).map((item) => item.id as number);
       formData.position_ids = (response.data.data.positions || []).map((item) => item.id as number);
     }
@@ -821,12 +738,9 @@ async function handleOpenDialog(type: "create" | "update" | "detail", id?: numbe
     dataFormRef.value.clearValidate();
   }
 
-  // 获取部门树
-  const deptResponse = await DeptAPI.listDept(queryFormData);
-  const treeData = deptResponse.data.data;
-  deptOptions.value = formatTree(treeData);
+  const deptResponse = await DeptAPI.listDept({});
+  deptOptions.value = formatTree(deptResponse.data.data);
 
-  // 获取角色列表
   const roleResponse = await RoleAPI.listRole();
   roleOptions.value = roleResponse.data.data.items
     .filter((item) => item.id !== undefined && item.name !== undefined)
@@ -837,7 +751,6 @@ async function handleOpenDialog(type: "create" | "update" | "detail", id?: numbe
     }))
     .filter((opt) => !opt.disabled);
 
-  // 获取岗位列表
   const positionResponse = await PositionAPI.listPosition();
   positionOptions.value = positionResponse.data.data.items
     .filter((item) => item.id !== undefined && item.name !== undefined)
@@ -849,9 +762,8 @@ async function handleOpenDialog(type: "create" | "update" | "detail", id?: numbe
     .filter((opt) => !opt.disabled);
 }
 
-// 提交表单（防抖）
 async function handleSubmit() {
-  dataFormRef.value.validate(async (valid: any) => {
+  dataFormRef.value.validate(async (valid: boolean) => {
     if (valid) {
       submitLoading.value = true;
       const id = formData.id;
@@ -862,13 +774,13 @@ async function handleSubmit() {
           await UserAPI.createUser(formData);
         }
         dialogVisible.visible = false;
-        resetForm();
-        handleResetQuery();
+        await resetForm();
+        refreshList();
         const userStore = useUserStore();
         if (id === userStore.basicInfo.id) {
           await userStore.getUserInfo();
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(error);
       } finally {
         submitLoading.value = false;
@@ -877,11 +789,14 @@ async function handleSubmit() {
   });
 }
 
-// 导出已改为通过导出弹窗 ExportModal 统一处理
-
-// 删除、批量删除
-async function handleDelete(ids: number[]) {
-  ElMessageBox.confirm("确认删除该项数据?", "警告", {
+async function handleMoreClick(status: string) {
+  const rows = contentRef.value?.getSelectionData() as UserInfo[] | undefined;
+  const ids = (rows ?? []).map((r) => r.id).filter((id): id is number => id != null);
+  if (!ids.length) {
+    ElMessage.warning("请先选择要操作的数据");
+    return;
+  }
+  ElMessageBox.confirm("确认启用或停用该项数据?", "警告", {
     confirmButtonText: "确定",
     cancelButtonText: "取消",
     type: "warning",
@@ -889,14 +804,9 @@ async function handleDelete(ids: number[]) {
     .then(async () => {
       try {
         submitLoading.value = true;
-        await UserAPI.deleteUser(ids);
-        handleResetQuery();
-        // 如果删除的是当前用户，则清空用户信息
-        const userStore = useUserStore();
-        if (userStore.basicInfo.id && ids.includes(userStore.basicInfo.id)) {
-          userStore.clearUserInfo();
-        }
-      } catch (error: any) {
+        await UserAPI.batchUser({ ids, status });
+        refreshList();
+      } catch (error: unknown) {
         console.error(error);
       } finally {
         submitLoading.value = false;
@@ -907,55 +817,27 @@ async function handleDelete(ids: number[]) {
     });
 }
 
-// 批量启用/停用
-async function handleMoreClick(status: string) {
-  if (selectIds.value.length) {
-    ElMessageBox.confirm("确认启用或停用该项数据?", "警告", {
-      confirmButtonText: "确定",
-      cancelButtonText: "取消",
-      type: "warning",
-    })
-      .then(async () => {
-        try {
-          submitLoading.value = true;
-          await UserAPI.batchUser({ ids: selectIds.value, status });
-          handleResetQuery();
-        } catch (error: any) {
-          console.error(error);
-        } finally {
-          submitLoading.value = false;
-        }
-      })
-      .catch(() => {
-        ElMessageBox.close();
-      });
-  }
-}
-
-// 打开导入弹窗
 function handleOpenImportDialog() {
   importDialogVisible.value = true;
 }
 
-// 打开导出弹窗
 function handleOpenExportsModal() {
   exportsDialogVisible.value = true;
 }
 
 const emit = defineEmits(["import-success"]);
 
-// 上传文件
-const handleUpload = async (formData: FormData) => {
+const handleUpload = async (formDataUpload: FormData) => {
   try {
     uploadLoading.value = true;
-    const response = await UserAPI.importUser(formData);
+    const response = await UserAPI.importUser(formDataUpload);
     if (response.data.code === ResultEnum.SUCCESS) {
       ElMessage.success(`${response.data.msg}，${response.data.data}`);
       importDialogVisible.value = false;
-      await handleQuery();
+      await refreshList();
       emit("import-success");
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(error);
     ElMessage.error("上传失败：" + error);
   } finally {
@@ -964,8 +846,51 @@ const handleUpload = async (formData: FormData) => {
 };
 
 onMounted(() => {
-  handleQuery();
+  nextTick(() => {
+    contentRef.value?.fetchPageData(getMergedListParams(), true);
+  });
 });
 </script>
 
-<style lang="scss" scoped></style>
+<style lang="scss" scoped>
+.page-row {
+  flex: 1;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.dept-col {
+  display: flex;
+}
+
+.right-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.right-col :deep(.data-table) {
+  flex: 1;
+  min-height: 0;
+}
+
+.right-col :deep(.data-table__content) {
+  min-height: 0;
+}
+
+.el-row {
+  height: 100%;
+}
+
+.el-col {
+  height: 100%;
+}
+
+.h-full {
+  height: 100%;
+}
+
+.w-full {
+  width: 100%;
+}
+</style>

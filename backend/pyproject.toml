@@ -34,6 +34,7 @@ dependencies = [
     "openpyxl==3.1.5",                          # Excel
     "pandas==2.2.2",                            # 数据处理
     "passlib==1.7.4",                           # 密码加密
+    "prefect>=3.1.0",                           # 工作流编排（与 Vue Flow 画布联动执行）
     "pillow==11.0.0",                           # 图片处理
     "psutil==6.1.0",                            # 系统信息
     "psycopg==3.3.2",                           # postgresql 同步操作数据库基于 psycopg是psycopg2升级版：psycopg2 是一个 pure-Python PostgreSQL 适配器。

@@ -20,30 +20,24 @@ from .schema import (
 )
 from .service import NodeService
 
-NodeRouter = APIRouter(route_class=OperationLogRoute, prefix="/node", tags=["节点"])
+NodeRouter = APIRouter(route_class=OperationLogRoute, prefix="/cronjob/node", tags=["节点"])
 
 
 @NodeRouter.get(
     "/options",
-    summary="获取节点类型选项",
-    description="获取节点类型选项列表，用于流程编排",
+    summary="获取定时任务节点列表",
+    description="供 APScheduler 定时任务使用；工作流画布请调用 GET /task/workflow/node-type/options",
     response_model=ResponseSchema[list[dict]],
 )
 async def get_node_options_controller(
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:query"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:query"]))],
 ) -> JSONResponse:
     """
-    获取节点类型选项
-
-    参数:
-    - auth (AuthSchema): 认证信息模型
-
-    返回:
-    - JSONResponse: 包含节点类型选项列表的JSON响应
+    获取数据库中的定时任务节点定义（task_node），与编排节点类型无关。
     """
     result = await NodeService.get_node_options_service(auth=auth)
-    log.info("获取节点类型选项成功")
-    return SuccessResponse(data=result, msg="获取节点类型选项成功")
+    log.info("获取定时任务节点选项成功")
+    return SuccessResponse(data=result, msg="获取定时任务节点选项成功")
 
 
 @NodeRouter.get(
@@ -54,7 +48,7 @@ async def get_node_options_controller(
 )
 async def get_obj_detail_controller(
     id: Annotated[int, Path(description="节点ID")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:detail"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:detail"]))],
 ) -> JSONResponse:
     """
     获取节点详情
@@ -80,7 +74,7 @@ async def get_obj_detail_controller(
 async def get_obj_list_controller(
     page: Annotated[PaginationQueryParam, Depends()],
     search: Annotated[NodeQueryParam, Depends()],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:query"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:query"]))],
 ) -> JSONResponse:
     """
     查询节点
@@ -113,7 +107,7 @@ async def get_obj_list_controller(
 )
 async def create_obj_controller(
     data: NodeCreateSchema,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:create"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:create"]))],
 ) -> JSONResponse:
     """
     创建节点
@@ -139,7 +133,7 @@ async def create_obj_controller(
 async def update_obj_controller(
     data: NodeUpdateSchema,
     id: Annotated[int, Path(description="节点ID")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:update"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:update"]))],
 ) -> JSONResponse:
     """
     修改节点
@@ -165,7 +159,7 @@ async def update_obj_controller(
 )
 async def delete_obj_controller(
     ids: Annotated[list[int], Body(description="ID列表")],
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:delete"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:delete"]))],
 ) -> JSONResponse:
     """
     删除节点
@@ -189,7 +183,7 @@ async def delete_obj_controller(
     response_model=ResponseSchema[None],
 )
 async def clear_obj_controller(
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:delete"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:delete"]))],
 ) -> JSONResponse:
     """
     清空所有节点
@@ -214,7 +208,7 @@ async def clear_obj_controller(
 async def execute_job_controller(
     id: Annotated[int, Path(description="节点ID")],
     data: NodeExecuteSchema,
-    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:node:execute"]))],
+    auth: Annotated[AuthSchema, Depends(AuthPermission(["module_task:cronjob:node:execute"]))],
 ) -> JSONResponse:
     """
     调试节点

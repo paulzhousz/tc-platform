@@ -108,7 +108,7 @@ const handlePromptClick = (prompt: string) => {
         }
 
         &:focus-visible {
-          outline: 2px solid color-mix(in srgb, var(--el-color-primary) 40%, transparent);
+          outline: 2px solid var(--el-color-primary);
           outline-offset: 2px;
           border-color: var(--el-color-primary);
         }

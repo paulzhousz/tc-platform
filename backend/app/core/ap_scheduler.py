@@ -44,7 +44,7 @@ from redis.asyncio import Redis
 from app.config.setting import settings
 from app.core.database import engine
 from app.core.logger import log
-from app.plugin.module_task.node.model import NodeModel
+from app.plugin.module_task.cronjob.node.model import NodeModel
 from app.utils.cron_util import CronUtil
 
 scheduler = AsyncIOScheduler()
@@ -574,7 +574,7 @@ class SchedulerUtil:
         try:
             from sqlalchemy.orm import Session
 
-            from app.plugin.module_task.job.model import JobModel
+            from app.plugin.module_task.cronjob.job.model import JobModel
 
             with Session(engine) as session:
                 session.query(JobModel).delete()
@@ -592,7 +592,7 @@ class SchedulerUtil:
         try:
             from sqlalchemy.orm import Session
 
-            from app.plugin.module_task.job.model import JobModel
+            from app.plugin.module_task.cronjob.job.model import JobModel
 
             with Session(engine) as session:
                 session.query(JobModel).filter(JobModel.status == "pending").update(
@@ -766,7 +766,7 @@ class SchedulerUtil:
         """
         from sqlalchemy.orm import Session
 
-        from app.plugin.module_task.job.model import JobModel
+        from app.plugin.module_task.cronjob.job.model import JobModel
 
         try:
             job = cls.get_job(job_id=job_id)
@@ -801,7 +801,7 @@ class SchedulerUtil:
         """
         from sqlalchemy.orm import Session
 
-        from app.plugin.module_task.job.model import JobModel
+        from app.plugin.module_task.cronjob.job.model import JobModel
 
         job = cls.get_job(job_id=job_id)
         next_run_time = str(job.next_run_time) if job and job.next_run_time else None
@@ -836,7 +836,7 @@ class SchedulerUtil:
         """
         from sqlalchemy.orm import Session
 
-        from app.plugin.module_task.job.model import JobModel
+        from app.plugin.module_task.cronjob.job.model import JobModel
 
         try:
             job = cls.get_job(job_id=job_id)
@@ -934,7 +934,7 @@ class SchedulerUtil:
         """
         from sqlalchemy.orm import Session
 
-        from app.plugin.module_task.job.model import JobModel
+        from app.plugin.module_task.cronjob.job.model import JobModel
 
         with Session(engine) as session:
             job_log = (
@@ -1230,7 +1230,7 @@ class SchedulerUtil:
         """
         from sqlalchemy.orm import Session
 
-        from app.plugin.module_task.job.model import JobModel
+        from app.plugin.module_task.cronjob.job.model import JobModel
 
         jobs = cls.get_all_jobs()
         sync_count = 0

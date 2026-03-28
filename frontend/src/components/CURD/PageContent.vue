@@ -1,192 +1,201 @@
 <template>
-  <div
-    class="rounded bg-[var(--el-bg-color)] border border-[var(--el-border-color)] p-5 h-full md:flex flex-1 flex-col md:overflow-auto"
+  <el-card
+    class="data-table flex-1 min-h-0"
+    :shadow="config.cardShadow ?? 'never'"
+    :class="contentConfig.cardClass"
+    :body-style="cardBodyStyle"
   >
-    <!-- 表格工具栏 -->
-    <div class="flex flex-col md:flex-row justify-between gap-y-2.5 mb-2.5">
-      <!-- 左侧工具栏 -->
-      <div class="toolbar-left flex gap-y-2.5 gap-x-2 md:gap-x-3 flex-wrap">
-        <template v-for="(btn, index) in toolbarLeftBtn" :key="index">
-          <el-button
-            v-hasPerm="btn.perm ?? '*:*:*'"
-            v-bind="btn.attrs"
-            :disabled="btn.name === 'delete' && removeIds.length === 0"
-            @click="handleToolbar(btn.name)"
-          >
-            {{ btn.text }}
-          </el-button>
-        </template>
-      </div>
-      <!-- 右侧工具栏 -->
-      <div class="toolbar-right flex gap-y-2.5 gap-x-2 md:gap-x-3 flex-wrap">
-        <template v-for="(btn, index) in toolbarRightBtn" :key="index">
-          <el-popover v-if="btn.name === 'filter'" placement="bottom" trigger="click">
-            <template #reference>
-              <el-button v-bind="btn.attrs"></el-button>
-            </template>
-            <el-scrollbar max-height="350px">
-              <template v-for="col in cols" :key="col.prop">
-                <el-checkbox v-if="col.prop" v-model="col.show" :label="col.label" />
-              </template>
-            </el-scrollbar>
-          </el-popover>
-          <el-button
-            v-else
-            v-hasPerm="btn.perm ?? '*:*:*'"
-            v-bind="btn.attrs"
-            @click="handleToolbar(btn.name)"
-          ></el-button>
-        </template>
-      </div>
+    <template v-if="slots.header" #header>
+      <slot name="header" />
+    </template>
+    <!-- 表格工具栏：#toolbar 可完全自定义；默认左右分栏 -->
+    <div
+      v-if="
+        config.showToolbar !== false &&
+        (slots.toolbar || toolbarLeftBtn.length > 0 || toolbarRightBtn.length > 0)
+      "
+      class="data-table__toolbar"
+    >
+      <slot
+        name="toolbar"
+        :toolbar-left="toolbarLeftBtn"
+        :toolbar-right="toolbarRightBtn"
+        :on-toolbar="handleToolbar"
+        :remove-ids="removeIds"
+        :cols="cols"
+      >
+        <CrudToolbarLeft
+          v-if="toolbarLeftBtn.length > 0"
+          :remove-ids="removeIds"
+          :config-buttons="toolbarLeftBtn"
+          @toolbar="handleToolbar"
+        />
+        <div class="data-table__toolbar--right">
+          <CrudToolbarRight :buttons="toolbarRightBtn" :cols="cols" :on-toolbar="handleToolbar" />
+        </div>
+      </slot>
     </div>
 
-    <!-- 列表 -->
-    <el-table
-      ref="tableRef"
-      v-loading="loading"
-      v-bind="contentConfig.table"
-      :data="pageData"
-      :row-key="pk"
-      class="flex-1"
-      @selection-change="handleSelectionChange"
-      @filter-change="handleFilterChange"
-    >
-      <template v-for="col in cols" :key="col.prop">
-        <el-table-column v-if="col.show" v-bind="col">
-          <template #default="scope">
-            <!-- 显示图片 -->
-            <template v-if="col.templet === 'image'">
-              <template v-if="col.prop">
-                <template v-if="Array.isArray(scope.row[col.prop])">
-                  <template v-for="(item, index) in scope.row[col.prop]" :key="item">
-                    <el-image
-                      :src="item"
-                      :preview-src-list="scope.row[col.prop]"
-                      :initial-index="index"
-                      :preview-teleported="true"
-                      :style="`width: ${col.imageWidth ?? 40}px; height: ${col.imageHeight ?? 40}px`"
+    <!-- 列表：默认内置 el-table；传入 #table 插槽可完全自定义（普通表 / 树表等） -->
+    <div class="data-table__content">
+      <slot
+        name="table"
+        :data="pageData"
+        :loading="loading"
+        :table-ref="tableRef"
+        :on-selection-change="handleSelectionChange"
+        :pagination="pagination"
+      >
+        <el-table
+          ref="tableRef"
+          v-loading="loading"
+          v-bind="contentConfig.table"
+          :data="pageData"
+          :row-key="pk"
+          class="flex-1"
+          @selection-change="handleSelectionChange"
+          @filter-change="handleFilterChange"
+        >
+          <template v-for="col in cols" :key="col.prop">
+            <el-table-column v-if="col.show" v-bind="col">
+              <template #default="scope">
+                <!-- 显示图片 -->
+                <template v-if="col.templet === 'image'">
+                  <template v-if="col.prop">
+                    <template v-if="Array.isArray(scope.row[col.prop])">
+                      <template v-for="(item, index) in scope.row[col.prop]" :key="item">
+                        <el-image
+                          :src="item"
+                          :preview-src-list="scope.row[col.prop]"
+                          :initial-index="Number(index)"
+                          :preview-teleported="true"
+                          :style="`width: ${col.imageWidth ?? 40}px; height: ${col.imageHeight ?? 40}px`"
+                        />
+                      </template>
+                    </template>
+                    <template v-else>
+                      <el-image
+                        :src="scope.row[col.prop]"
+                        :preview-src-list="[scope.row[col.prop]]"
+                        :preview-teleported="true"
+                        :style="`width: ${col.imageWidth ?? 40}px; height: ${col.imageHeight ?? 40}px`"
+                      />
+                    </template>
+                  </template>
+                </template>
+                <!-- 根据行的selectList属性返回对应列表值 -->
+                <template v-else-if="col.templet === 'list'">
+                  <template v-if="col.prop">
+                    {{ (col.selectList ?? {})[scope.row[col.prop]] }}
+                  </template>
+                </template>
+                <!-- 格式化显示链接 -->
+                <template v-else-if="col.templet === 'url'">
+                  <template v-if="col.prop">
+                    <el-link type="primary" :href="scope.row[col.prop]" target="_blank">
+                      {{ scope.row[col.prop] }}
+                    </el-link>
+                  </template>
+                </template>
+                <!-- 生成开关组件 -->
+                <template v-else-if="col.templet === 'switch'">
+                  <template v-if="col.prop">
+                    <!-- pageData.length>0: 解决el-switch组件会在表格初始化的时候触发一次change事件 -->
+                    <el-switch
+                      v-model="scope.row[col.prop]"
+                      :active-value="col.activeValue ?? 1"
+                      :inactive-value="col.inactiveValue ?? 0"
+                      :inline-prompt="true"
+                      :active-text="col.activeText ?? ''"
+                      :inactive-text="col.inactiveText ?? ''"
+                      :validate-event="false"
+                      :disabled="col.disabled"
+                      @change="
+                        pageData.length > 0 &&
+                        handleModify(col.prop, scope.row[col.prop], scope.row)
+                      "
                     />
                   </template>
                 </template>
-                <template v-else>
-                  <el-image
-                    :src="scope.row[col.prop]"
-                    :preview-src-list="[scope.row[col.prop]]"
-                    :preview-teleported="true"
-                    :style="`width: ${col.imageWidth ?? 40}px; height: ${col.imageHeight ?? 40}px`"
-                  />
+                <!-- 生成输入框组件 -->
+                <template v-else-if="col.templet === 'input'">
+                  <template v-if="col.prop">
+                    <el-input
+                      v-model="scope.row[col.prop]"
+                      :type="col.inputType ?? 'text'"
+                      :disabled="col.disabled"
+                      @blur="handleModify(col.prop, scope.row[col.prop], scope.row)"
+                    />
+                  </template>
+                </template>
+                <!-- 格式化为价格 -->
+                <template v-else-if="col.templet === 'price'">
+                  <template v-if="col.prop">
+                    {{ `${col.priceFormat ?? "￥"}${scope.row[col.prop]}` }}
+                  </template>
+                </template>
+                <!-- 格式化为百分比 -->
+                <template v-else-if="col.templet === 'percent'">
+                  <template v-if="col.prop">{{ scope.row[col.prop] }}%</template>
+                </template>
+                <!-- 显示图标 -->
+                <template v-else-if="col.templet === 'icon'">
+                  <template v-if="col.prop">
+                    <template v-if="scope.row[col.prop].startsWith('el-icon-')">
+                      <el-icon>
+                        <component :is="scope.row[col.prop].replace('el-icon-', '')" />
+                      </el-icon>
+                    </template>
+                    <template v-else>
+                      <div class="i-svg:{{ scope.row[col.prop] }}" />
+                    </template>
+                  </template>
+                </template>
+                <!-- 格式化时间 -->
+                <template v-else-if="col.templet === 'date'">
+                  <template v-if="col.prop">
+                    {{
+                      scope.row[col.prop]
+                        ? useDateFormat(
+                            scope.row[col.prop],
+                            col.dateFormat ?? "YYYY-MM-DD HH:mm:ss"
+                          ).value
+                        : ""
+                    }}
+                  </template>
+                </template>
+                <!-- 列操作栏 -->
+                <template v-else-if="col.templet === 'tool'">
+                  <template v-for="(btn, index) in tableToolbarBtn" :key="index">
+                    <el-button
+                      v-if="btn.render === undefined || btn.render(scope.row)"
+                      v-hasPerm="btn.perm ?? '*:*:*'"
+                      v-bind="btn.attrs"
+                      @click="
+                        handleOperate({
+                          name: btn.name,
+                          row: scope.row,
+                          column: scope.column,
+                          $index: scope.$index,
+                        })
+                      "
+                    >
+                      {{ btn.text }}
+                    </el-button>
+                  </template>
+                </template>
+                <!-- 自定义 -->
+                <template v-else-if="col.templet === 'custom'">
+                  <slot :name="col.slotName ?? col.prop" :prop="col.prop" v-bind="scope" />
                 </template>
               </template>
-            </template>
-            <!-- 根据行的selectList属性返回对应列表值 -->
-            <template v-else-if="col.templet === 'list'">
-              <template v-if="col.prop">
-                {{ (col.selectList ?? {})[scope.row[col.prop]] }}
-              </template>
-            </template>
-            <!-- 格式化显示链接 -->
-            <template v-else-if="col.templet === 'url'">
-              <template v-if="col.prop">
-                <el-link type="primary" :href="scope.row[col.prop]" target="_blank">
-                  {{ scope.row[col.prop] }}
-                </el-link>
-              </template>
-            </template>
-            <!-- 生成开关组件 -->
-            <template v-else-if="col.templet === 'switch'">
-              <template v-if="col.prop">
-                <!-- pageData.length>0: 解决el-switch组件会在表格初始化的时候触发一次change事件 -->
-                <el-switch
-                  v-model="scope.row[col.prop]"
-                  :active-value="col.activeValue ?? 1"
-                  :inactive-value="col.inactiveValue ?? 0"
-                  :inline-prompt="true"
-                  :active-text="col.activeText ?? ''"
-                  :inactive-text="col.inactiveText ?? ''"
-                  :validate-event="false"
-                  :disabled="col.disabled"
-                  @change="
-                    pageData.length > 0 && handleModify(col.prop, scope.row[col.prop], scope.row)
-                  "
-                />
-              </template>
-            </template>
-            <!-- 生成输入框组件 -->
-            <template v-else-if="col.templet === 'input'">
-              <template v-if="col.prop">
-                <el-input
-                  v-model="scope.row[col.prop]"
-                  :type="col.inputType ?? 'text'"
-                  :disabled="col.disabled"
-                  @blur="handleModify(col.prop, scope.row[col.prop], scope.row)"
-                />
-              </template>
-            </template>
-            <!-- 格式化为价格 -->
-            <template v-else-if="col.templet === 'price'">
-              <template v-if="col.prop">
-                {{ `${col.priceFormat ?? "￥"}${scope.row[col.prop]}` }}
-              </template>
-            </template>
-            <!-- 格式化为百分比 -->
-            <template v-else-if="col.templet === 'percent'">
-              <template v-if="col.prop">{{ scope.row[col.prop] }}%</template>
-            </template>
-            <!-- 显示图标 -->
-            <template v-else-if="col.templet === 'icon'">
-              <template v-if="col.prop">
-                <template v-if="scope.row[col.prop].startsWith('el-icon-')">
-                  <el-icon>
-                    <component :is="scope.row[col.prop].replace('el-icon-', '')" />
-                  </el-icon>
-                </template>
-                <template v-else>
-                  <div class="i-svg:{{ scope.row[col.prop] }}" />
-                </template>
-              </template>
-            </template>
-            <!-- 格式化时间 -->
-            <template v-else-if="col.templet === 'date'">
-              <template v-if="col.prop">
-                {{
-                  scope.row[col.prop]
-                    ? useDateFormat(scope.row[col.prop], col.dateFormat ?? "YYYY-MM-DD HH:mm:ss")
-                        .value
-                    : ""
-                }}
-              </template>
-            </template>
-            <!-- 列操作栏 -->
-            <template v-else-if="col.templet === 'tool'">
-              <template v-for="(btn, index) in tableToolbarBtn" :key="index">
-                <el-button
-                  v-if="btn.render === undefined || btn.render(scope.row)"
-                  v-hasPerm="btn.perm ?? '*:*:*'"
-                  v-bind="btn.attrs"
-                  @click="
-                    handleOperate({
-                      name: btn.name,
-                      row: scope.row,
-                      column: scope.column,
-                      $index: scope.$index,
-                    })
-                  "
-                >
-                  {{ btn.text }}
-                </el-button>
-              </template>
-            </template>
-            <!-- 自定义 -->
-            <template v-else-if="col.templet === 'custom'">
-              <slot :name="col.slotName ?? col.prop" :prop="col.prop" v-bind="scope" />
-            </template>
+            </el-table-column>
           </template>
-        </el-table-column>
-      </template>
-    </el-table>
+        </el-table>
+      </slot>
+    </div>
 
-    <!-- 分页 -->
-    <div v-if="showPagination" class="mt-4">
+    <template v-if="showPagination" #footer>
       <el-scrollbar :class="['h-8!', { 'flex-x-end': contentConfig?.pagePosition === 'right' }]">
         <el-pagination
           v-bind="pagination"
@@ -194,15 +203,15 @@
           @current-change="handleCurrentChange"
         />
       </el-scrollbar>
-    </div>
+    </template>
 
     <!-- 导出弹窗 -->
-    <el-dialog
+    <EnhancedDialog
       v-model="exportsModalVisible"
-      :align-center="true"
       title="导出数据"
       width="600px"
-      style="padding-right: 0"
+      dialog-class="curd-embed-dialog"
+      modal-class="curd-embed-dialog"
       @close="handleCloseExportsModal"
     >
       <!-- 滚动 -->
@@ -251,14 +260,14 @@
           <el-button @click="handleCloseExportsModal">取 消</el-button>
         </div>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
     <!-- 导入弹窗 -->
-    <el-dialog
+    <EnhancedDialog
       v-model="importModalVisible"
-      :align-center="true"
       title="导入数据"
       width="600px"
-      style="padding-right: 0"
+      dialog-class="curd-embed-dialog"
+      modal-class="curd-embed-dialog"
       @close="handleCloseImportModal"
     >
       <!-- 滚动 -->
@@ -317,13 +326,14 @@
           <el-button @click="handleCloseImportModal">取 消</el-button>
         </div>
       </template>
-    </el-dialog>
-  </div>
+    </EnhancedDialog>
+  </el-card>
 </template>
 
 <script setup lang="ts">
 import { useDateFormat, useThrottleFn } from "@vueuse/core";
 import {
+  ElMessage,
   genFileId,
   type FormInstance,
   type FormRules,
@@ -333,9 +343,23 @@ import {
   type TableInstance,
 } from "element-plus";
 import ExcelJS from "exceljs";
-import { reactive, ref, computed } from "vue";
+import { reactive, ref, computed, nextTick, useSlots } from "vue";
+import CrudToolbarLeft from "./CrudToolbarLeft.vue";
+import CrudToolbarRight from "./CrudToolbarRight.vue";
+import EnhancedDialog from "./EnhancedDialog.vue";
 import type { IContentConfig, IObject, IOperateData } from "./types";
 import type { IToolsButton } from "./types";
+
+const slots = useSlots();
+
+const cardBodyStyle = {
+  display: "flex",
+  flex: 1,
+  flexDirection: "column" as const,
+  minHeight: 0,
+  overflow: "hidden",
+  padding: "16px 20px",
+};
 
 // 定义接收的属性
 const props = defineProps<{ contentConfig: IContentConfig }>();
@@ -355,13 +379,14 @@ const config = computed(() => props.contentConfig);
 const buttonConfig = reactive<Record<string, IObject>>({
   add: { text: "新增", attrs: { icon: "plus", type: "success" }, perm: "add" },
   delete: { text: "删除", attrs: { icon: "delete", type: "danger" }, perm: "delete" },
-  import: { text: "导入", attrs: { icon: "upload", type: "default" }, perm: "import" },
-  export: { text: "导出", attrs: { icon: "download", type: "default" }, perm: "export" },
-  refresh: { text: "刷新", attrs: { icon: "refresh", type: "default" }, perm: "*:*:*" },
-  filter: { text: "筛选列", attrs: { icon: "operation", type: "default" }, perm: "*:*:*" },
-  search: { text: "搜索", attrs: { icon: "search", type: "" }, perm: "search" },
-  imports: { text: "批量导入", attrs: { icon: "upload", type: "" }, perm: "imports" },
-  exports: { text: "批量导出", attrs: { icon: "download", type: "" }, perm: "exports" },
+  /** 右侧圆形工具条：与业务页手写工具栏（如 user、demo）语义色一致 */
+  import: { text: "导入", attrs: { icon: "upload", type: "info" }, perm: "import" },
+  export: { text: "导出", attrs: { icon: "download", type: "warning" }, perm: "export" },
+  refresh: { text: "刷新", attrs: { icon: "refresh", type: "success" }, perm: "*:*:*" },
+  filter: { text: "筛选列", attrs: { icon: "operation", type: "danger" }, perm: "*:*:*" },
+  search: { text: "搜索", attrs: { icon: "search", type: "info" }, perm: "search" },
+  imports: { text: "批量导入", attrs: { icon: "upload", type: "success" }, perm: "imports" },
+  exports: { text: "批量导出", attrs: { icon: "download", type: "warning" }, perm: "exports" },
   view: { text: "查看", attrs: { icon: "view", type: "primary" }, perm: "view" },
   edit: { text: "编辑", attrs: { icon: "edit", type: "primary" }, perm: "edit" },
 });
@@ -393,12 +418,15 @@ function getButtonPerm(action: string): string | null {
 function createToolbar(toolbar: Array<string | IToolsButton>, attr = {}) {
   return toolbar.map((item) => {
     const isString = typeof item === "string";
+    const name = isString ? item : item?.name || "";
+    const base = (isString ? buttonConfig[item] : buttonConfig[name]) as IObject | undefined;
     return {
-      name: isString ? item : item?.name || "",
-      text: isString ? buttonConfig[item].text : item?.text,
+      name,
+      text: isString ? buttonConfig[item].text : (item?.text ?? base?.text),
+      // 对象写法（如 { name: 'refresh', perm: 'refresh' }）需合并 buttonConfig 默认 attrs，否则无 icon/type
       attrs: {
         ...attr,
-        ...(isString ? buttonConfig[item].attrs : item?.attrs),
+        ...(isString ? buttonConfig[item].attrs : { ...base?.attrs, ...item?.attrs }),
       },
       render: isString ? undefined : (item?.render ?? undefined),
       perm: isString
@@ -416,15 +444,30 @@ const toolbarLeftBtn = computed(() => {
   return createToolbar(config.value.toolbar, {});
 });
 
+const hideColumnFilter = computed(() => {
+  if (config.value.hideColumnFilter === true) return true;
+  if (config.value.hideColumnFilter === false) return false;
+  return Boolean(slots.table);
+});
+
 // 右侧工具栏按钮
 const toolbarRightBtn = computed(() => {
   if (!config.value.defaultToolbar || config.value.defaultToolbar.length === 0) return [];
-  return createToolbar(config.value.defaultToolbar, { circle: true });
+  const raw = createToolbar(config.value.defaultToolbar, { circle: true });
+  if (hideColumnFilter.value) {
+    return raw.filter((b) => b.name !== "filter");
+  }
+  return raw;
 });
 
-// 表格操作工具栏
-const tableToolbar = config.value.cols[config.value.cols.length - 1].operat ?? ["edit", "delete"];
-const tableToolbarBtn = createToolbar(tableToolbar, { link: true, size: "small" });
+// 表格操作工具栏（优先使用 templet 为 tool 的列，避免仅数据列时取错最后一列）
+const toolColumn = computed(
+  () => config.value.cols.find((c) => c.templet === "tool") ?? config.value.cols.at(-1)
+);
+const tableToolbar = computed(() => toolColumn.value?.operat ?? ["edit", "delete"]);
+const tableToolbarBtn = computed(() =>
+  createToolbar(tableToolbar.value, { link: true, size: "small" })
+);
 
 // 表格列
 const cols = ref(
@@ -498,16 +541,22 @@ function handleRefresh(isRestart = false) {
 
 // 删除
 function handleDelete(id?: number | string) {
-  const ids = [id || removeIds.value].join(",");
+  let ids = "";
+  if (id !== undefined && id !== null && id !== "") {
+    ids = String(id);
+  } else if (removeIds.value.length) {
+    ids = removeIds.value.map(String).join(",");
+  }
   if (!ids) {
     ElMessage.warning("请勾选删除项");
     return;
   }
 
-  ElMessageBox.confirm("确认删除?", "警告", {
-    confirmButtonText: "确定",
-    cancelButtonText: "取消",
-    type: "warning",
+  const dc = props.contentConfig.deleteConfirm;
+  ElMessageBox.confirm(dc?.message ?? "确认删除?", dc?.title ?? "警告", {
+    confirmButtonText: dc?.confirmButtonText ?? "确定",
+    cancelButtonText: dc?.cancelButtonText ?? "取消",
+    type: dc?.type ?? "warning",
   })
     .then(function () {
       if (props.contentConfig.deleteAction) {
@@ -849,6 +898,16 @@ function getFilterParams() {
 
 // 获取分页数据
 let lastFormData = {};
+function getIndexActionErrorMessage(err: unknown): string {
+  if (err && typeof err === "object" && "response" in err) {
+    const d = (err as { response?: { data?: { msg?: string; message?: string } } }).response?.data;
+    if (d?.msg) return String(d.msg);
+    if (d?.message) return String(d.message);
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return "数据加载失败";
+}
+
 function fetchPageData(formData: IObject = {}, isRestart = false) {
   loading.value = true;
   // 上一次搜索条件
@@ -878,11 +937,17 @@ function fetchPageData(formData: IObject = {}, isRestart = false) {
         pageData.value = data;
       }
     })
+    .catch((err: unknown) => {
+      console.error(err);
+      ElMessage.error(getIndexActionErrorMessage(err));
+    })
     .finally(() => {
       loading.value = false;
     });
 }
-fetchPageData();
+if (props.contentConfig.initialFetch !== false) {
+  fetchPageData();
+}
 
 // 导出Excel
 function exportPageData(formData: IObject = {}) {
@@ -919,15 +984,22 @@ function saveXlsx(fileData: any, fileName: string) {
 }
 
 // 暴露的属性和方法
-defineExpose({ fetchPageData, exportPageData, getFilterParams, getSelectionData, handleRefresh });
+defineExpose({
+  fetchPageData,
+  exportPageData,
+  getFilterParams,
+  getSelectionData,
+  handleRefresh,
+  handleToolbar,
+  handleDelete,
+  pageData,
+  pagination,
+  tableRef,
+});
 </script>
 
 <style lang="scss" scoped>
-.toolbar-left,
-.toolbar-right {
-  .el-button {
-    margin-right: 0 !important;
-    margin-left: 0 !important;
-  }
+:deep(.curd-embed-dialog) {
+  padding-right: 0;
 }
 </style>

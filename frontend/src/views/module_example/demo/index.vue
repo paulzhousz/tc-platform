@@ -1,438 +1,248 @@
-<!-- 演示示例 -->
+<!-- 演示示例：PageSearch + PageContent CRUD 封装 -->
 <template>
   <div class="app-container">
-    <!-- 内容区域 -->
-    <el-card class="data-table">
-      <template #header>
-        <div class="card-header">
-          <span>
-            演示示例列表
-            <el-tooltip content="演示示例列表">
-              <QuestionFilled class="w-4 h-4 mx-1" />
-            </el-tooltip>
-          </span>
-        </div>
-        <!-- 搜索区域 -->
-        <div v-show="visible" class="search-container">
-          <el-form
-            ref="queryFormRef"
-            :model="queryFormData"
-            label-suffix=":"
-            :inline="true"
-            @submit.prevent="handleQuery"
-          >
-            <el-form-item prop="name" label="名称">
-              <el-input v-model="queryFormData.name" placeholder="请输入名称" clearable />
-            </el-form-item>
-            <el-form-item prop="status" label="状态">
-              <el-select
-                v-model="queryFormData.status"
-                placeholder="请选择状态"
-                style="width: 170px"
-                clearable
-              >
-                <el-option value="0" label="启用" />
-                <el-option value="1" label="停用" />
-              </el-select>
-            </el-form-item>
-            <el-form-item v-if="isExpand" prop="created_id" label="创建人">
-              <UserTableSelect
-                v-model="queryFormData.created_id"
-                @confirm-click="handleConfirm"
-                @clear-click="handleQuery"
-              />
-            </el-form-item>
-            <el-form-item v-if="isExpand" prop="updated_id" label="更新人">
-              <UserTableSelect
-                v-model="queryFormData.updated_id"
-                @confirm-click="handleConfirm"
-                @clear-click="handleQuery"
-              />
-            </el-form-item>
-            <!-- 时间范围，收起状态下隐藏 -->
-            <el-form-item v-if="isExpand" prop="created_time" label="创建时间">
-              <DatePicker
-                v-model="createdDateRange"
-                @update:model-value="handleCreatedDateRangeChange"
-              />
-            </el-form-item>
-            <el-form-item v-if="isExpand" prop="updated_time" label="更新时间">
-              <DatePicker
-                v-model="updatedDateRange"
-                @update:model-value="handleUpdatedDateRangeChange"
-              />
-            </el-form-item>
-            <!-- 查询、重置、展开/收起按钮 -->
-            <el-form-item>
-              <el-button
-                v-hasPerm="['module_example:demo:query']"
-                type="primary"
-                icon="search"
-                @click="handleQuery"
-              >
-                查询
-              </el-button>
-              <el-button
-                v-hasPerm="['module_example:demo:query']"
-                icon="refresh"
-                @click="handleResetQuery"
-              >
-                重置
-              </el-button>
-              <!-- 展开/收起 -->
-              <template v-if="isExpandable">
-                <el-link
-                  class="ml-3"
-                  type="primary"
-                  underline="never"
-                  @click="isExpand = !isExpand"
-                >
-                  {{ isExpand ? "收起" : "展开" }}
-                  <el-icon>
-                    <template v-if="isExpand">
-                      <ArrowUp />
-                    </template>
-                    <template v-else>
-                      <ArrowDown />
-                    </template>
-                  </el-icon>
-                </el-link>
-              </template>
-            </el-form-item>
-          </el-form>
-        </div>
-      </template>
+    <PageSearch
+      ref="searchRef"
+      :search-config="searchConfig"
+      @query-click="handleQueryClick"
+      @reset-click="handleResetClick"
+    />
 
-      <!-- 功能区域 -->
-      <div class="data-table__toolbar">
-        <div class="data-table__toolbar--left">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_example:demo:create']"
-                type="success"
-                icon="plus"
-                @click="handleOpenDialog('create')"
-              >
-                新增
-              </el-button>
-            </el-col>
-            <el-col :span="1.5">
-              <el-button
-                v-hasPerm="['module_example:demo:delete']"
-                type="danger"
-                icon="delete"
-                :disabled="selectIds.length === 0"
-                @click="handleDelete(selectIds)"
-              >
-                批量删除
-              </el-button>
-            </el-col>
-            <el-col :span="1.5">
-              <el-dropdown v-hasPerm="['module_example:demo:patch']" trigger="click">
-                <el-button type="default" :disabled="selectIds.length === 0" icon="ArrowDown">
-                  更多
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item icon="Check" @click="handleMoreClick('0')">
-                      批量启用
-                    </el-dropdown-item>
-                    <el-dropdown-item icon="CircleClose" @click="handleMoreClick('1')">
-                      批量停用
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </el-col>
-          </el-row>
-        </div>
-        <div class="data-table__toolbar--right">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-tooltip content="导入">
-                <el-button
-                  v-hasPerm="['module_example:demo:import']"
-                  type="success"
-                  icon="upload"
-                  circle
-                  @click="handleOpenImportDialog"
-                />
-              </el-tooltip>
-            </el-col>
-            <el-col :span="1.5">
-              <el-tooltip content="导出">
-                <el-button
-                  v-hasPerm="['module_example:demo:export']"
-                  type="warning"
-                  icon="download"
-                  circle
-                  @click="handleOpenExportsModal"
-                />
-              </el-tooltip>
-            </el-col>
-            <el-col :span="1.5">
-              <el-tooltip content="搜索显示/隐藏">
-                <el-button
-                  v-hasPerm="['*:*:*']"
-                  type="info"
-                  icon="search"
-                  circle
-                  @click="visible = !visible"
-                />
-              </el-tooltip>
-            </el-col>
-            <el-col :span="1.5">
-              <el-tooltip content="刷新">
-                <el-button
-                  v-hasPerm="['module_example:demo:query']"
-                  type="primary"
-                  icon="refresh"
-                  circle
-                  @click="handleRefresh"
-                />
-              </el-tooltip>
-            </el-col>
-            <el-col :span="1.5">
-              <el-popover placement="bottom" trigger="click">
-                <template #reference>
-                  <el-button type="danger" icon="operation" circle></el-button>
-                </template>
-                <el-scrollbar max-height="350px">
-                  <template v-for="column in tableColumns" :key="column.prop">
-                    <el-checkbox v-if="column.prop" v-model="column.show" :label="column.label" />
-                  </template>
-                </el-scrollbar>
-              </el-popover>
-            </el-col>
-          </el-row>
-        </div>
-      </div>
-
-      <!-- 表格区域：系统配置列表 -->
-      <div class="data-table__content">
-        <el-table
-          ref="tableRef"
-          v-loading="loading"
-          :data="pageTableData"
-          height="calc(100vh - 440px)"
-          max-height="calc(100vh - 440px)"
-          border
-          stripe
-          @selection-change="handleSelectionChange"
-        >
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'selection')?.show"
-            type="selection"
-            min-width="55"
-            align="center"
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'index')?.show"
-            fixed
-            label="序号"
-            min-width="60"
-          >
-            <template #default="scope">
-              {{ (queryFormData.page_no - 1) * queryFormData.page_size + scope.$index + 1 }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'name')?.show"
-            label="名称"
-            prop="name"
-            min-width="140"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'uuid')?.show"
-            label="UUID"
-            prop="uuid"
-            min-width="180"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'status')?.show"
-            label="状态"
-            prop="status"
-            min-width="120"
-            show-overflow-tooltip
-          >
-            <template #default="scope">
-              <el-tag :type="scope.row.status ? 'success' : 'info'">
-                {{ scope.row.status ? "启用" : "停用" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'a')?.show"
-            label="整数"
-            prop="a"
-            min-width="100"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'b')?.show"
-            label="大整数"
-            prop="b"
-            min-width="120"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'c')?.show"
-            label="浮点数"
-            prop="c"
-            min-width="100"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'd')?.show"
-            label="布尔值"
-            prop="d"
-            min-width="100"
-            show-overflow-tooltip
-          >
-            <template #default="scope">
-              <el-tag :type="scope.row.d ? 'success' : 'danger'">
-                {{ scope.row.d ? "是" : "否" }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'e')?.show"
-            label="日期"
-            prop="e"
-            min-width="120"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'f')?.show"
-            label="时间"
-            prop="f"
-            min-width="120"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'g')?.show"
-            label="日期时间"
-            prop="g"
-            min-width="180"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'h')?.show"
-            label="长文本"
-            prop="h"
-            min-width="140"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'description')?.show"
-            label="描述"
-            prop="description"
-            min-width="140"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'created_time')?.show"
-            label="创建时间"
-            prop="created_time"
-            min-width="180"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'updated_time')?.show"
-            label="更新时间"
-            prop="updated_time"
-            min-width="180"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'created_id')?.show"
-            label="创建人"
-            prop="created_id"
-            min-width="120"
-            show-overflow-tooltip
-          >
-            <template #default="scope">
-              <el-tag>{{ scope.row.created_by?.name }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'updated_id')?.show"
-            label="更新人"
-            prop="updated_id"
-            min-width="120"
-            show-overflow-tooltip
-          >
-            <template #default="scope">
-              <el-tag>{{ scope.row.updated_by?.name }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column
-            v-if="tableColumns.find((col) => col.prop === 'operation')?.show"
-            fixed="right"
-            label="操作"
-            align="center"
-            min-width="200"
-          >
-            <template #default="scope">
-              <el-button
-                v-hasPerm="['module_example:demo:detail']"
-                type="info"
-                size="small"
-                link
-                icon="document"
-                @click="handleOpenDialog('detail', scope.row.id)"
-              >
-                详情
-              </el-button>
-              <el-button
-                v-hasPerm="['module_example:demo:update']"
-                type="primary"
-                size="small"
-                link
-                icon="edit"
-                @click="handleOpenDialog('update', scope.row.id)"
-              >
-                编辑
-              </el-button>
-              <el-button
-                v-hasPerm="['module_example:demo:delete']"
-                type="danger"
-                size="small"
-                link
-                icon="delete"
-                @click="handleDelete([scope.row.id])"
-              >
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <!-- 分页区域 -->
-      <template #footer>
-        <pagination
-          v-model:total="total"
-          v-model:page="queryFormData.page_no"
-          v-model:limit="queryFormData.page_size"
-          @pagination="loadingData"
+    <PageContent
+      ref="contentRef"
+      :content-config="contentConfig"
+      @search-click="handleToggleSearch"
+      @add-click="handleOpenDialog('create')"
+    >
+      <!-- 与 PageContent 默认结构一致：不再套一层 data-table__toolbar（外层已由组件提供） -->
+      <template #toolbar="{ toolbarRight, onToolbar, removeIds, cols }">
+        <CrudToolbarLeft
+          :remove-ids="removeIds"
+          :perm-create="['module_example:demo:create']"
+          :perm-delete="['module_example:demo:delete']"
+          :perm-patch="['module_example:demo:patch']"
+          @add="handleOpenDialog('create')"
+          @delete="onToolbar('delete')"
+          @more="handleMoreClick"
         />
+        <div class="data-table__toolbar--right">
+          <CrudToolbarRight :buttons="toolbarRight" :cols="cols" :on-toolbar="onToolbar" />
+        </div>
       </template>
-    </el-card>
 
-    <!-- 弹窗区域 -->
-    <el-dialog
+      <template #table="{ data, loading, tableRef, onSelectionChange, pagination }">
+        <div class="data-table__content">
+          <el-table
+            :ref="tableRef as any"
+            v-loading="loading"
+            :data="data"
+            height="100%"
+            border
+            stripe
+            @selection-change="onSelectionChange"
+          >
+            <template #empty>
+              <el-empty :image-size="80" description="暂无数据" />
+            </template>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'selection')?.show"
+              type="selection"
+              min-width="55"
+              align="center"
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'index')?.show"
+              fixed
+              label="序号"
+              min-width="60"
+            >
+              <template #default="scope">
+                {{ (pagination.currentPage - 1) * pagination.pageSize + scope.$index + 1 }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'name')?.show"
+              label="名称"
+              prop="name"
+              min-width="140"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'uuid')?.show"
+              label="UUID"
+              prop="uuid"
+              min-width="180"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'status')?.show"
+              label="状态"
+              prop="status"
+              min-width="120"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <el-tag :type="scope.row.status ? 'success' : 'info'">
+                  {{ scope.row.status ? "启用" : "停用" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'a')?.show"
+              label="整数"
+              prop="a"
+              min-width="100"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'b')?.show"
+              label="大整数"
+              prop="b"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'c')?.show"
+              label="浮点数"
+              prop="c"
+              min-width="100"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'd')?.show"
+              label="布尔值"
+              prop="d"
+              min-width="100"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <el-tag :type="scope.row.d ? 'success' : 'danger'">
+                  {{ scope.row.d ? "是" : "否" }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'e')?.show"
+              label="日期"
+              prop="e"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'f')?.show"
+              label="时间"
+              prop="f"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'g')?.show"
+              label="日期时间"
+              prop="g"
+              min-width="180"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'h')?.show"
+              label="长文本"
+              prop="h"
+              min-width="140"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'description')?.show"
+              label="描述"
+              prop="description"
+              min-width="140"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'created_time')?.show"
+              label="创建时间"
+              prop="created_time"
+              min-width="180"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'updated_time')?.show"
+              label="更新时间"
+              prop="updated_time"
+              min-width="180"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'created_id')?.show"
+              label="创建人"
+              prop="created_id"
+              min-width="120"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <el-tag>{{ scope.row.created_by?.name }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'updated_id')?.show"
+              label="更新人"
+              prop="updated_id"
+              min-width="120"
+              show-overflow-tooltip
+            >
+              <template #default="scope">
+                <el-tag>{{ scope.row.updated_by?.name }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="contentCols.find((col) => col.prop === 'operation')?.show"
+              fixed="right"
+              label="操作"
+              align="center"
+              min-width="200"
+            >
+              <template #default="scope">
+                <el-button
+                  v-hasPerm="['module_example:demo:detail']"
+                  type="info"
+                  size="small"
+                  link
+                  icon="View"
+                  @click="handleOpenDialog('detail', scope.row.id)"
+                >
+                  详情
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_example:demo:update']"
+                  type="primary"
+                  size="small"
+                  link
+                  icon="edit"
+                  @click="handleOpenDialog('update', scope.row.id)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_example:demo:delete']"
+                  type="danger"
+                  size="small"
+                  link
+                  icon="delete"
+                  @click="handleRowDelete(scope.row.id)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
+    </PageContent>
+
+    <EnhancedDialog
       v-model="dialogVisible.visible"
       :title="dialogVisible.title"
+      width="920px"
       @close="handleCloseDialog"
     >
-      <!-- 详情 -->
       <template v-if="dialogVisible.type === 'detail'">
         <el-descriptions :column="4" border>
           <el-descriptions-item label="名称" :span="2">
@@ -492,7 +302,6 @@
           </el-descriptions-item>
         </el-descriptions>
       </template>
-      <!-- 新增、编辑表单 -->
       <template v-else>
         <el-form
           ref="dataFormRef"
@@ -605,7 +414,6 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <!-- 详情弹窗不需要确定按钮的提交逻辑 -->
           <el-button @click="handleCloseDialog">取消</el-button>
           <el-button v-if="dialogVisible.type !== 'detail'" type="primary" @click="handleSubmit">
             确定
@@ -613,24 +421,7 @@
           <el-button v-else type="primary" @click="handleCloseDialog">确定</el-button>
         </div>
       </template>
-    </el-dialog>
-
-    <!-- 导入弹窗 -->
-    <ImportModal
-      v-model="importDialogVisible"
-      :content-config="curdContentConfig"
-      :loading="uploadLoading"
-      @upload="handleUpload"
-    />
-
-    <!-- 导出弹窗 -->
-    <ExportModal
-      v-model="exportsDialogVisible"
-      :content-config="curdContentConfig"
-      :query-params="queryFormData"
-      :page-data="pageTableData"
-      :selection-data="selectionRows"
-    />
+    </EnhancedDialog>
   </div>
 </template>
 
@@ -640,33 +431,110 @@ defineOptions({
   inheritAttrs: false,
 });
 
-import { ref, reactive, onMounted } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ref, reactive, onMounted, markRaw, nextTick } from "vue";
+import { fetchAllPages } from "@/utils/fetchAllPages";
+import { ElMessageBox } from "element-plus";
 import { ResultEnum } from "@/enums/api/result.enum";
 import DemoAPI, { DemoTable, DemoForm, DemoPageQuery } from "@/api/module_example/demo";
-import ImportModal from "@/components/CURD/ImportModal.vue";
-import ExportModal from "@/components/CURD/ExportModal.vue";
-import DatePicker from "@/components/DatePicker/index.vue";
-import type { IContentConfig } from "@/components/CURD/types";
-import { QuestionFilled, ArrowUp, ArrowDown } from "@element-plus/icons-vue";
-import { formatToDateTime } from "@/utils/dateUtil";
+import CrudToolbarLeft from "@/components/CURD/CrudToolbarLeft.vue";
+import CrudToolbarRight from "@/components/CURD/CrudToolbarRight.vue";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDialog from "@/components/CURD/EnhancedDialog.vue";
+import { useCrudList } from "@/components/CURD/useCrudList";
+import UserTableSelect from "@/views/module_system/user/components/UserTableSelect.vue";
+import type { IContentConfig, ISearchConfig } from "@/components/CURD/types";
+import JsonPretty from "@/components/JsonPretty/index.vue";
 
-const visible = ref(true);
-const queryFormRef = ref();
-const dataFormRef = ref();
-const total = ref(0);
-const selectIds = ref<number[]>([]);
-const selectionRows = ref<DemoTable[]>([]);
-const loading = ref(false);
-const isExpand = ref(false);
-const isExpandable = ref(true);
-const metadataList = ref<{ key: string; value: string }[]>([]);
+const { searchRef, contentRef, handleQueryClick, handleResetClick, refreshList } = useCrudList();
 
-// 分页表单
-const pageTableData = ref<DemoTable[]>([]);
+function triggerUserSearch() {
+  nextTick(() => refreshList());
+}
 
-// 表格列配置
-const tableColumns = ref([
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_example:demo",
+  colon: true,
+  isExpandable: true,
+  showNumber: 2,
+  showToggle: false,
+  form: { labelWidth: "auto" },
+  formItems: [
+    {
+      prop: "name",
+      label: "名称",
+      type: "input",
+      attrs: { placeholder: "请输入名称", clearable: true },
+    },
+    {
+      prop: "status",
+      label: "状态",
+      type: "select",
+      options: [
+        { label: "启用", value: "0" },
+        { label: "停用", value: "1" },
+      ],
+      attrs: { placeholder: "请选择状态", clearable: true, style: { width: "170px" } },
+    },
+    {
+      prop: "created_id",
+      label: "创建人",
+      type: "user-table-select",
+      initialValue: null,
+      events: {
+        "confirm-click": triggerUserSearch,
+        "clear-click": triggerUserSearch,
+      },
+    },
+    {
+      prop: "updated_id",
+      label: "更新人",
+      type: "user-table-select",
+      initialValue: null,
+      events: {
+        "confirm-click": triggerUserSearch,
+        "clear-click": triggerUserSearch,
+      },
+    },
+    {
+      prop: "created_time",
+      label: "创建时间",
+      type: "date-picker",
+      initialValue: [],
+      attrs: {
+        type: "datetimerange",
+        valueFormat: "YYYY-MM-DD HH:mm:ss",
+        rangeSeparator: "至",
+        startPlaceholder: "开始",
+        endPlaceholder: "结束",
+      },
+    },
+    {
+      prop: "updated_time",
+      label: "更新时间",
+      type: "date-picker",
+      initialValue: [],
+      attrs: {
+        type: "datetimerange",
+        valueFormat: "YYYY-MM-DD HH:mm:ss",
+        rangeSeparator: "至",
+        startPlaceholder: "开始",
+        endPlaceholder: "结束",
+      },
+    },
+  ],
+  customComponents: {
+    "user-table-select": markRaw(UserTableSelect),
+  },
+});
+
+const contentCols = reactive<
+  Array<{
+    prop?: string;
+    label?: string;
+    show?: boolean;
+  }>
+>([
   { prop: "selection", label: "选择框", show: true },
   { prop: "index", label: "序号", show: true },
   { prop: "name", label: "名称", show: true },
@@ -689,89 +557,74 @@ const tableColumns = ref([
   { prop: "operation", label: "操作", show: true },
 ]);
 
-// 仅用于导出字段的列（排除非数据列及嵌套对象列）
-const exportColumns = [
-  { prop: "name", label: "名称" },
-  { prop: "uuid", label: "UUID" },
-  { prop: "status", label: "状态" },
-  { prop: "a", label: "整数" },
-  { prop: "b", label: "大整数" },
-  { prop: "c", label: "浮点数" },
-  { prop: "d", label: "布尔值" },
-  { prop: "e", label: "日期" },
-  { prop: "f", label: "时间" },
-  { prop: "g", label: "日期时间" },
-  { prop: "h", label: "长文本" },
-  { prop: "i", label: "元数据" },
-  { prop: "description", label: "描述" },
-  { prop: "created_time", label: "创建时间" },
-  { prop: "updated_time", label: "更新时间" },
-];
+function normalizeDemoQuery(params: Record<string, unknown>) {
+  const p = { ...params } as Record<string, unknown>;
+  if (Array.isArray(p.created_time) && p.created_time.length === 0) p.created_time = undefined;
+  if (Array.isArray(p.updated_time) && p.updated_time.length === 0) p.updated_time = undefined;
+  return p as unknown as DemoPageQuery;
+}
 
-// 导入/导出配置
-const curdContentConfig = {
+const contentConfig = reactive<IContentConfig<DemoPageQuery>>({
   permPrefix: "module_example:demo",
-  cols: exportColumns as any,
+  hideColumnFilter: false,
+  initialFetch: false,
+  cols: contentCols as IContentConfig["cols"],
+  toolbar: [],
+  defaultToolbar: ["import", "exports", "search", "refresh", "filter"],
+  pagination: {
+    pageSize: 10,
+    pageSizes: [10, 20, 30, 50],
+  },
+  request: { page_no: "page_no", page_size: "page_size" },
+  indexAction: async (params) => {
+    const res = await DemoAPI.getDemoList(
+      normalizeDemoQuery(params as unknown as Record<string, unknown>)
+    );
+    return {
+      total: res.data.data.total,
+      list: res.data.data.items,
+    };
+  },
+  deleteAction: (ids) =>
+    DemoAPI.deleteDemo(
+      ids
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => !Number.isNaN(n) && n > 0)
+    ),
   importTemplate: () => DemoAPI.downloadTemplateDemo(),
-  exportsAction: async (params: any) => {
-    const query: any = { ...params };
+  importAction: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return DemoAPI.importDemo(fd).then((res) => {
+      if (res.data.code !== ResultEnum.SUCCESS) {
+        return Promise.reject(new Error(res.data.msg));
+      }
+    });
+  },
+  exportsAction: async (params: DemoPageQuery) => {
+    const query: Record<string, unknown> = { ...params };
     if (typeof query.status === "string") {
       query.status = query.status === "true";
     }
-    query.page_no = 1;
-    query.page_size = 9999;
-    const all: any[] = [];
-    while (true) {
-      const res = await DemoAPI.getDemoList(query);
-      const items = res.data?.data?.items || [];
-      const total = res.data?.data?.total || 0;
-      all.push(...items);
-      if (all.length >= total || items.length === 0) break;
-      query.page_no += 1;
-    }
-    return all;
+    return fetchAllPages<DemoTable>({
+      pageSize: 9999,
+      initialQuery: query,
+      fetchPage: async (q) => {
+        const res = await DemoAPI.getDemoList(
+          normalizeDemoQuery(q as unknown as Record<string, unknown>)
+        );
+        return {
+          total: res.data?.data?.total ?? 0,
+          list: res.data?.data?.items ?? [],
+        };
+      },
+    });
   },
-} as unknown as IContentConfig;
-// 详情表单
-const detailFormData = ref<DemoTable>({});
-// 日期范围临时变量
-const createdDateRange = ref<[Date, Date] | []>([]);
-// 更新时间范围临时变量
-const updatedDateRange = ref<[Date, Date] | []>([]);
-
-// 处理创建时间范围变化
-function handleCreatedDateRangeChange(range: [Date, Date]) {
-  createdDateRange.value = range;
-  if (range && range.length === 2) {
-    queryFormData.created_time = [formatToDateTime(range[0]), formatToDateTime(range[1])];
-  } else {
-    queryFormData.created_time = undefined;
-  }
-}
-
-// 处理更新时间范围变化
-function handleUpdatedDateRangeChange(range: [Date, Date]) {
-  updatedDateRange.value = range;
-  if (range && range.length === 2) {
-    queryFormData.updated_time = [formatToDateTime(range[0]), formatToDateTime(range[1])];
-  } else {
-    queryFormData.updated_time = undefined;
-  }
-}
-
-// 分页查询参数
-const queryFormData = reactive<DemoPageQuery>({
-  page_no: 1,
-  page_size: 10,
-  name: undefined,
-  status: undefined,
-  created_time: undefined,
-  updated_time: undefined,
-  created_id: undefined,
-  updated_id: undefined,
 });
 
-// 编辑表单
+const detailFormData = ref<DemoTable>({});
+
 const formData = reactive<DemoForm>({
   id: undefined,
   name: "",
@@ -788,79 +641,29 @@ const formData = reactive<DemoForm>({
   i: undefined,
 });
 
-// 弹窗状态
 const dialogVisible = reactive({
   title: "",
   visible: false,
   type: "create" as "create" | "update" | "detail",
 });
 
-// 表单验证规则
 const rules = reactive({
   name: [{ required: true, message: "请输入名称", trigger: "blur" }],
   status: [{ required: true, message: "请选择状态", trigger: "blur" }],
 });
 
-// 导入弹窗显示状态
-const importDialogVisible = ref(false);
-const uploadLoading = ref(false);
+const dataFormRef = ref();
 
-// 导出弹窗显示状态
-const exportsDialogVisible = ref(false);
+const metadataList = ref<{ key: string; value: string }[]>([]);
 
-// 打开导入弹窗
-function handleOpenImportDialog() {
-  importDialogVisible.value = true;
+function handleToggleSearch() {
+  searchRef.value?.toggleVisible();
 }
 
-// 打开导出弹窗
-function handleOpenExportsModal() {
-  exportsDialogVisible.value = true;
+function handleRowDelete(id: number) {
+  contentRef.value?.handleDelete(id);
 }
 
-// 列表刷新
-async function handleRefresh() {
-  await loadingData();
-}
-
-// 加载表格数据
-async function loadingData() {
-  loading.value = true;
-  try {
-    const response = await DemoAPI.getDemoList(queryFormData);
-    pageTableData.value = response.data.data.items;
-    total.value = response.data.data.total;
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-// 查询（重置页码后获取数据）
-async function handleQuery() {
-  queryFormData.page_no = 1;
-  loadingData();
-}
-
-// 选择创建人后触发查询
-function handleConfirm() {
-  handleQuery();
-}
-
-// 重置查询
-async function handleResetQuery() {
-  queryFormRef.value.resetFields();
-  queryFormData.page_no = 1;
-  // 重置日期范围选择器
-  createdDateRange.value = [];
-  updatedDateRange.value = [];
-  queryFormData.created_time = undefined;
-  queryFormData.updated_time = undefined;
-  loadingData();
-}
-
-// 定义初始表单数据常量
 const initialFormData: DemoForm = {
   id: undefined,
   name: "",
@@ -877,30 +680,20 @@ const initialFormData: DemoForm = {
   i: undefined,
 };
 
-// 重置表单
 async function resetForm() {
   if (dataFormRef.value) {
     dataFormRef.value.resetFields();
     dataFormRef.value.clearValidate();
   }
-  // 完全重置 formData 为初始状态
   Object.assign(formData, initialFormData);
   metadataList.value = [];
 }
 
-// 行复选框选中项变化
-async function handleSelectionChange(selection: any) {
-  selectIds.value = selection.map((item: any) => item.id);
-  selectionRows.value = selection;
-}
-
-// 关闭弹窗
 async function handleCloseDialog() {
   dialogVisible.visible = false;
   resetForm();
 }
 
-// 打开弹窗
 async function handleOpenDialog(type: "create" | "update" | "detail", id?: number) {
   dialogVisible.type = type;
   if (id) {
@@ -928,12 +721,9 @@ async function handleOpenDialog(type: "create" | "update" | "detail", id?: numbe
   dialogVisible.visible = true;
 }
 
-// 提交表单（防抖）
 async function handleSubmit() {
-  // 表单校验
-  dataFormRef.value.validate(async (valid: any) => {
+  dataFormRef.value.validate(async (valid: boolean) => {
     if (valid) {
-      loading.value = true;
       const submitData = { ...formData };
       if (metadataList.value.length > 0) {
         const metadataObj: Record<string, string> = {};
@@ -947,51 +737,37 @@ async function handleSubmit() {
         submitData.i = undefined;
       }
       const id = formData.id;
-      if (id) {
-        try {
+      try {
+        if (id) {
           await DemoAPI.updateDemo(id, { id, ...submitData });
-          dialogVisible.visible = false;
-          resetForm();
-          handleCloseDialog();
-          handleResetQuery();
-        } catch (error: any) {
-          console.error(error);
-        } finally {
-          loading.value = false;
-        }
-      } else {
-        try {
+        } else {
           await DemoAPI.createDemo(submitData);
-          dialogVisible.visible = false;
-          resetForm();
-          handleCloseDialog();
-          handleResetQuery();
-        } catch (error: any) {
-          console.error(error);
-        } finally {
-          loading.value = false;
         }
+        dialogVisible.visible = false;
+        await resetForm();
+        refreshList();
+      } catch (error: unknown) {
+        console.error(error);
       }
     }
   });
 }
 
-// 删除、批量删除
-async function handleDelete(ids: number[]) {
-  ElMessageBox.confirm("确认删除该项数据?", "警告", {
+async function handleMoreClick(status: string) {
+  const rows = contentRef.value?.getSelectionData() ?? [];
+  const ids = rows.map((r: { id?: number }) => r.id).filter(Boolean) as number[];
+  if (!ids.length) return;
+  ElMessageBox.confirm(`确认${status === "0" ? "启用" : "停用"}该项数据?`, "警告", {
     confirmButtonText: "确定",
     cancelButtonText: "取消",
     type: "warning",
   })
     .then(async () => {
       try {
-        loading.value = true;
-        await DemoAPI.deleteDemo(ids);
-        handleResetQuery();
-      } catch (error: any) {
+        await DemoAPI.batchDemo({ ids, status });
+        refreshList();
+      } catch (error: unknown) {
         console.error(error);
-      } finally {
-        loading.value = false;
       }
     })
     .catch(() => {
@@ -999,50 +775,8 @@ async function handleDelete(ids: number[]) {
     });
 }
 
-// 批量启用/停用
-async function handleMoreClick(status: string) {
-  if (selectIds.value.length) {
-    ElMessageBox.confirm(`确认${status === "0" ? "启用" : "停用"}该项数据?`, "警告", {
-      confirmButtonText: "确定",
-      cancelButtonText: "取消",
-      type: "warning",
-    })
-      .then(async () => {
-        try {
-          loading.value = true;
-          await DemoAPI.batchDemo({ ids: selectIds.value, status });
-          handleResetQuery();
-        } catch (error: any) {
-          console.error(error);
-        } finally {
-          loading.value = false;
-        }
-      })
-      .catch(() => {
-        ElMessageBox.close();
-      });
-  }
-}
-
-// 处理上传
-const handleUpload = async (formData: FormData) => {
-  try {
-    uploadLoading.value = true;
-    const response = await DemoAPI.importDemo(formData);
-    if (response.data.code === ResultEnum.SUCCESS) {
-      ElMessage.success(`${response.data.msg}，${response.data.data}`);
-      importDialogVisible.value = false;
-      await handleQuery();
-    }
-  } catch (error: any) {
-    console.error(error);
-  } finally {
-    uploadLoading.value = false;
-  }
-};
-
 onMounted(() => {
-  loadingData();
+  refreshList();
 });
 </script>
 

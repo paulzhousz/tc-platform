@@ -1,17 +1,32 @@
 <!-- 部门树 -->
 <template>
   <el-card shadow="hover">
-    <el-input v-model="deptName" placeholder="部门名称">
-      <template #prefix>
-        <el-icon>
-          <Search />
+    <div class="dept-tree-toolbar">
+      <el-input v-model="deptName" placeholder="部门名称" class="dept-tree-search">
+        <template #prefix>
+          <el-icon>
+            <Search />
+          </el-icon>
+        </template>
+      </el-input>
+      <el-button
+        type="primary"
+        link
+        size="small"
+        class="dept-tree-expand-btn"
+        @click="toggleTreeExpandAll"
+      >
+        <el-icon :size="14">
+          <Switch />
         </el-icon>
-      </template>
-    </el-input>
+        <span>{{ treeExpanded ? "收起" : "展开" }}</span>
+      </el-button>
+    </div>
 
     <el-tree
       ref="deptTreeRef"
       class="mt-2"
+      node-key="value"
       :data="deptOptions"
       :props="{ children: 'children', label: 'label', disabled: 'disabled' }"
       :expand-on-click-node="false"
@@ -27,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { Switch } from "@element-plus/icons-vue";
 import DeptAPI, { DeptPageQuery } from "@/api/module_system/dept";
 import { formatTree } from "@/utils/common";
 import type { FilterNodeMethodFunction, TreeInstance } from "element-plus";
@@ -41,14 +57,65 @@ const props = defineProps({
 const deptOptions = ref<OptionType[]>([]); // 部门列表
 const deptTreeRef = ref<TreeInstance>(); // 部门树
 const deptName = ref(); // 部门名称
+/** 与「全部展开」状态同步，用于按钮提示（手动展开单节点后可能不完全一致） */
+const treeExpanded = ref(true);
 
 const emits = defineEmits(["node-click", "update:modelValue"]);
 
 const deptId = useVModel(props, "modelValue", emits);
 
 watch(deptName, (val) => {
-  deptTreeRef.value!.filter(val);
+  deptTreeRef.value?.filter(val);
 });
+
+type TreeStoreNode = {
+  childNodes?: TreeStoreNode[];
+  expand: () => void;
+  collapse: () => void;
+};
+
+function getTreeRoot() {
+  const tree = deptTreeRef.value as TreeInstance & { store?: { root: TreeStoreNode } };
+  return tree?.store?.root;
+}
+
+/** 展开整棵树 */
+function expandAllTreeNodes() {
+  const root = getTreeRoot();
+  if (!root) return;
+  const walk = (node: TreeStoreNode) => {
+    node.childNodes?.forEach((child) => {
+      if (child.childNodes?.length) {
+        child.expand();
+        walk(child);
+      }
+    });
+  };
+  walk(root);
+}
+
+/** 收起整棵树 */
+function collapseAllTreeNodes() {
+  const root = getTreeRoot();
+  if (!root) return;
+  const walk = (node: TreeStoreNode) => {
+    node.childNodes?.forEach((child) => {
+      walk(child);
+      child.collapse();
+    });
+  };
+  walk(root);
+}
+
+function toggleTreeExpandAll() {
+  if (treeExpanded.value) {
+    collapseAllTreeNodes();
+    treeExpanded.value = false;
+  } else {
+    expandAllTreeNodes();
+    treeExpanded.value = true;
+  }
+}
 
 interface Tree {
   [key: string]: any;
@@ -87,3 +154,24 @@ onBeforeMount(() => {
     });
 });
 </script>
+
+<style scoped lang="scss">
+.dept-tree-toolbar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+
+  .dept-tree-search {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dept-tree-expand-btn {
+    flex-shrink: 0;
+    height: auto;
+    min-height: unset;
+    padding: 0 4px;
+    font-size: 12px;
+  }
+}
+</style>

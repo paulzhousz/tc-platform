@@ -1,4 +1,3 @@
-# # -*- coding: utf-8 -*-
 
 # from fastapi import APIRouter, Body, Depends, Path, UploadFile
 # from fastapi.responses import JSONResponse, StreamingResponse
@@ -30,11 +29,11 @@
 # ) -> JSONResponse:
 #     """
 #     获取租户详情
-    
+
 #     参数:
 #     - id (int): 租户ID
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含租户详情的JSON响应
 #     """
@@ -50,21 +49,21 @@
 # ) -> JSONResponse:
 #     """
 #     查询租户列表
-    
+
 #     参数:
 #     - page (PaginationQueryParam): 分页查询参数
 #     - search (TenantQueryParam): 查询参数
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含租户列表分页信息的JSON响应
 #     """
 #     # 使用数据库分页而不是应用层分页
 #     result_dict = await TenantService.page_service(
-#         auth=auth, 
-#         page_no=page.page_no if page.page_no is not None else 1, 
-#         page_size=page.page_size if page.page_size is not None else 10, 
-#         search=search, 
+#         auth=auth,
+#         page_no=page.page_no if page.page_no is not None else 1,
+#         page_size=page.page_size if page.page_size is not None else 10,
+#         search=search,
 #         order_by=page.order_by
 #     )
 #     log.info("查询租户列表成功")
@@ -77,11 +76,11 @@
 # ) -> JSONResponse:
 #     """
 #     创建租户
-    
+
 #     参数:
 #     - data (TenantCreateSchema): 租户创建模型
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含创建租户详情的JSON响应
 #     """
@@ -97,12 +96,12 @@
 # ) -> JSONResponse:
 #     """
 #     修改租户
-    
+
 #     参数:
 #     - data (TenantUpdateSchema): 租户更新模型
 #     - id (int): 租户ID
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含修改租户详情的JSON响应
 #     """
@@ -117,11 +116,11 @@
 # ) -> JSONResponse:
 #     """
 #     删除租户
-    
+
 #     参数:
 #     - ids (list[int]): 租户ID列表
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含删除租户详情的JSON响应
 #     """
@@ -136,11 +135,11 @@
 # ) -> JSONResponse:
 #     """
 #     批量修改租户状态
-    
+
 #     参数:
 #     - data (BatchSetAvailable): 批量修改租户状态模型
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含批量修改租户状态详情的JSON响应
 #     """
@@ -155,11 +154,11 @@
 # ) -> StreamingResponse:
 #     """
 #     导出租户
-    
+
 #     参数:
 #     - search (TenantQueryParam): 查询参数
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - StreamingResponse: 包含租户列表的Excel文件流响应
 #     """
@@ -182,11 +181,11 @@
 # ) -> JSONResponse:
 #     """
 #     导入租户
-    
+
 #     参数:
 #     - file (UploadFile): 导入的Excel文件
 #     - auth (AuthSchema): 认证信息模型
-    
+
 #     返回:
 #     - JSONResponse: 包含导入租户详情的JSON响应
 #     """
@@ -198,7 +197,7 @@
 # async def export_obj_template_controller() -> StreamingResponse:
 #     """
 #     获取租户导入模板
-    
+
 #     返回:
 #     - StreamingResponse: 包含租户导入模板的Excel文件流响应
 #     """

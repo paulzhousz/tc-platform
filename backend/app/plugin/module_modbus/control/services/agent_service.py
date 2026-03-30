@@ -130,17 +130,19 @@ def _extract_operation_intent(chat_history: list[dict]) -> dict[str, Any] | None
 
 def _preprocess_user_message(
     session: AgentSessionModel, message: str
-) -> tuple[str, str | None, bool, bool]:
+) -> tuple[str, str | None, bool, bool, bool]:
     """
     预处理用户消息，检查消歧/确认上下文并注入提示
 
     Returns:
-        (processed_message, context_hint, should_clear_disambiguation, should_clear_pending)
+        (processed_message, context_hint, should_clear_disambiguation, should_clear_pending, skip_user_message)
+        skip_user_message: 为 True 时表示消歧处理已完成，不需要再添加原始用户消息
     """
     context = session.operation_context or {}
     context_hint = None
     should_clear_disambiguation = False
     should_clear_pending = False
+    skip_user_message = False
 
     logger.info(
         f"[Agent] 预处理用户消息: '{message}', operation_context keys: {list(context.keys())}"
@@ -161,7 +163,7 @@ def _preprocess_user_message(
             logger.info("[Agent] 用户发送了新消息，自动取消待确认操作")
             should_clear_pending = True
             context_hint = """[系统提示] 用户发送了新请求，之前的待确认操作已自动取消。请处理用户的新请求。"""
-        return message, context_hint, should_clear_disambiguation, should_clear_pending
+        return message, context_hint, should_clear_disambiguation, should_clear_pending, False
 
     # 检查是否有消歧上下文
     disambiguation = context.get("disambiguation_context")
@@ -200,9 +202,22 @@ def _preprocess_user_message(
         if selected:
             should_clear_disambiguation = True
             if disambig_type == "device":
-                context_hint = f"""[系统提示] 用户选择了设备 "{selected['name']}"（device_id={selected['id']}）。
+                # 设备消歧后，提取原始意图并告知 LLM 搜索什么点位
+                intent = _extract_operation_intent(session.chat_history or [])
+                skip_user_message = True  # 消歧完成，跳过原始用户消息
+
+                if intent:
+                    tag_keyword = intent.get("tag", "")
+                    operation = intent.get("operation", "read")
+                    context_hint = f"""[系统提示] 用户选择了设备 "{selected['name']}"（device_id={selected['id']}）。
+原始请求是"{intent['raw_message']}"。
+请立即调用 search_tag_mapping(device_id={selected['id']}, query="{tag_keyword}") 搜索点位。
+如果找到唯一点位，直接执行{operation}操作。"""
+                else:
+                    context_hint = f"""[系统提示] 用户选择了设备 "{selected['name']}"（device_id={selected['id']}）。
 请使用 device_id={selected['id']} 调用 search_tag_mapping 搜索相关点位。"""
             elif disambig_type == "tag":
+                skip_user_message = True  # 消歧完成，跳过原始用户消息
                 intent = _extract_operation_intent(session.chat_history or [])
 
                 if intent:
@@ -235,7 +250,7 @@ def _preprocess_user_message(
     else:
         logger.info("[Agent] 无消歧上下文")
 
-    return message, context_hint, should_clear_disambiguation, should_clear_pending
+    return message, context_hint, should_clear_disambiguation, should_clear_pending, skip_user_message
 
 
 class AgentService:
@@ -679,8 +694,10 @@ class AgentService:
 
         return history
 
-    def _update_session(self, session: AgentSessionModel, user_message: str, assistant_reply: str):
+    async def _update_session(self, session: AgentSessionModel, user_message: str, assistant_reply: str):
         """更新会话"""
+        from sqlalchemy.orm.attributes import flag_modified
+
         chat_history = session.chat_history or []
 
         chat_history.append({"role": "user", "content": user_message})
@@ -691,8 +708,9 @@ class AgentService:
             chat_history = chat_history[-max_messages:]
 
         session.chat_history = chat_history
+        flag_modified(session, "chat_history")
         session.last_active = datetime.now()
-        self.db.commit()
+        await self.db.commit()
 
     async def update_disambiguation_context(
         self,
@@ -784,7 +802,7 @@ class AgentService:
 
         self._current_session = session
 
-        _, context_hint, should_clear_disambiguation, should_clear_pending = _preprocess_user_message(
+        _, context_hint, should_clear_disambiguation, should_clear_pending, skip_user_message = _preprocess_user_message(
             session, message
         )
         if context_hint:
@@ -799,12 +817,16 @@ class AgentService:
         # 构建消息列表
         messages = self._build_chat_history(session)
 
+        # 消歧处理完成后，只发送 context_hint，不添加假消息和原始用户消息
         if context_hint:
-            messages.append(HumanMessage(content=context_hint))
-            messages.append(AIMessage(content="我理解了，会按照提示处理。"))
-
-        # 添加当前用户消息
-        messages.append(HumanMessage(content=message))
+            if skip_user_message:
+                messages.append(HumanMessage(content=context_hint))
+            else:
+                messages.append(HumanMessage(content=context_hint))
+                messages.append(AIMessage(content="我理解了，会按照提示处理。"))
+                messages.append(HumanMessage(content=message))
+        else:
+            messages.append(HumanMessage(content=message))
 
         try:
             logger.info("[Agent] 开始执行 agent.invoke")
@@ -832,7 +854,7 @@ class AgentService:
 
             logger.info(f"[Agent] Agent 执行完成, reply={reply[:100] if reply else 'empty'}...")
 
-            self._update_session(session, message, reply)
+            await self._update_session(session, message, reply)
 
             return {
                 "session_id": session.session_id,
@@ -860,7 +882,7 @@ class AgentService:
 
         self._current_session = session
 
-        _, context_hint, should_clear_disambiguation, should_clear_pending = _preprocess_user_message(
+        _, context_hint, should_clear_disambiguation, should_clear_pending, skip_user_message = _preprocess_user_message(
             session, message
         )
         if context_hint:
@@ -880,12 +902,20 @@ class AgentService:
         # 构建消息列表
         messages = self._build_chat_history(session)
 
+        # 消歧处理完成后，只发送 context_hint，不添加假消息和原始用户消息
+        # 这样 LLM 能准确理解要执行的操作
         if context_hint:
-            messages.append(HumanMessage(content=context_hint))
-            messages.append(AIMessage(content="我理解了，会按照提示处理。"))
-
-        # 添加当前用户消息
-        messages.append(HumanMessage(content=message))
+            if skip_user_message:
+                # 消歧完成，直接发送指令让 LLM 执行
+                messages.append(HumanMessage(content=context_hint))
+            else:
+                # 其他情况（如确认回复），保持原有消息结构
+                messages.append(HumanMessage(content=context_hint))
+                messages.append(AIMessage(content="我理解了，会按照提示处理。"))
+                messages.append(HumanMessage(content=message))
+        else:
+            # 无特殊上下文，添加当前用户消息
+            messages.append(HumanMessage(content=message))
 
         try:
             full_reply = ""
@@ -1018,7 +1048,7 @@ class AgentService:
                                 for tc in ai_msg.tool_calls:
                                     logger.info(f"[Agent Tool] 工具调用: {tc}")
 
-            self._update_session(session, message, full_reply)
+            await self._update_session(session, message, full_reply)
             logger.info(
                 f"[Agent Stream] 执行完成, actions={len(actions)}, reply_length={len(full_reply)}"
             )

@@ -107,7 +107,7 @@ class TcpModbusClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.read_holding_registers(
-                address=address, count=count, slave=slave
+                address=address, count=count, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -122,7 +122,7 @@ class TcpModbusClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.read_input_registers(
-                address=address, count=count, slave=slave
+                address=address, count=count, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -136,7 +136,7 @@ class TcpModbusClient(IModbusClient):
         self, address: int, count: int = 1, slave: int = 1
     ) -> dict[str, Any]:
         try:
-            result = self._client.read_coils(address=address, count=count, slave=slave)
+            result = self._client.read_coils(address=address, count=count, device_id=slave)
             if result.isError():
                 return {"success": False, "error": str(result)}
             return {"success": True, "values": result.bits[:count]}
@@ -150,7 +150,7 @@ class TcpModbusClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.read_discrete_inputs(
-                address=address, count=count, slave=slave
+                address=address, count=count, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -165,7 +165,7 @@ class TcpModbusClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.write_register(
-                address=address, value=value, slave=slave
+                address=address, value=value, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -179,7 +179,7 @@ class TcpModbusClient(IModbusClient):
         self, address: int, value: bool, slave: int = 1
     ) -> dict[str, Any]:
         try:
-            result = self._client.write_coil(address=address, value=value, slave=slave)
+            result = self._client.write_coil(address=address, value=value, device_id=slave)
             if result.isError():
                 return {"success": False, "error": str(result)}
             return {"success": True}
@@ -230,7 +230,7 @@ class RtuOverTcpClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.read_holding_registers(
-                address=address, count=count, slave=slave
+                address=address, count=count, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -245,7 +245,7 @@ class RtuOverTcpClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.read_input_registers(
-                address=address, count=count, slave=slave
+                address=address, count=count, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -259,7 +259,7 @@ class RtuOverTcpClient(IModbusClient):
         self, address: int, count: int = 1, slave: int = 1
     ) -> dict[str, Any]:
         try:
-            result = self._client.read_coils(address=address, count=count, slave=slave)
+            result = self._client.read_coils(address=address, count=count, device_id=slave)
             if result.isError():
                 return {"success": False, "error": str(result)}
             return {"success": True, "values": result.bits[:count]}
@@ -273,7 +273,7 @@ class RtuOverTcpClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.read_discrete_inputs(
-                address=address, count=count, slave=slave
+                address=address, count=count, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -288,7 +288,7 @@ class RtuOverTcpClient(IModbusClient):
     ) -> dict[str, Any]:
         try:
             result = self._client.write_register(
-                address=address, value=value, slave=slave
+                address=address, value=value, device_id=slave
             )
             if result.isError():
                 return {"success": False, "error": str(result)}
@@ -302,7 +302,7 @@ class RtuOverTcpClient(IModbusClient):
         self, address: int, value: bool, slave: int = 1
     ) -> dict[str, Any]:
         try:
-            result = self._client.write_coil(address=address, value=value, slave=slave)
+            result = self._client.write_coil(address=address, value=value, device_id=slave)
             if result.isError():
                 return {"success": False, "error": str(result)}
             return {"success": True}

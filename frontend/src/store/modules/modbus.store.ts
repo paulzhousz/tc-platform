@@ -187,20 +187,28 @@ export const useModbusStore = defineStore("modbus", {
               // 更新消息内容
               this.messages[assistantIndex].content += event.content;
             } else if (event.type === "action_start" && event.action) {
-              // 添加新的 action
+              // 添加新的 action（完整复制后端返回的所有字段）
               const action = event.action;
               actions.push({
                 tool: action.tool,
                 args: action.args || {},
+                status: action.status || "running",
+                started_at: action.started_at,
                 result: undefined,
               });
               this.messages[assistantIndex].actions = [...actions];
             } else if (event.type === "action_end" && event.action) {
-              // 更新 action 结果
+              // 更新 action 结果（更新所有字段）
               const action = event.action;
               const idx = actions.findIndex((a) => a.tool === action.tool);
               if (idx >= 0) {
+                // 更新所有可能的字段
                 actions[idx].result = action.result;
+                actions[idx].status = action.status;
+                actions[idx].data = action.data;
+                actions[idx].error = action.error;
+                actions[idx].duration_ms = action.duration_ms;
+                actions[idx].finished_at = action.finished_at;
                 this.messages[assistantIndex].actions = [...actions];
               }
             } else if (event.type === "done") {

@@ -921,6 +921,8 @@ class AgentService:
             full_reply = ""
             actions = []
             should_stop = False
+            # 记录工具调用参数: tool_call_id -> {"name": str, "args": dict, "started_at": str}
+            pending_tool_calls: dict[str, dict] = {}
 
             logger.info(
                 f"[Agent Stream] 开始执行, user_id={user_id}, message={message}"
@@ -953,15 +955,26 @@ class AgentService:
                         if hasattr(token, "tool_call_chunks") and token.tool_call_chunks:
                             for tc in token.tool_call_chunks:
                                 if tc.get("name"):
-                                    logger.info(f"[Agent Tool] 调用开始: {tc['name']}")
+                                    tool_call_id = tc.get("id", "")
+                                    tool_args = tc.get("args", {})
+                                    started_at = datetime.now().isoformat()
+
+                                    # 记录工具调用参数供后续 action_end 使用
+                                    pending_tool_calls[tool_call_id] = {
+                                        "name": tc["name"],
+                                        "args": tool_args,
+                                        "started_at": started_at,
+                                    }
+
+                                    logger.info(f"[Agent Tool] 调用开始: {tc['name']}, args={tool_args}")
                                     yield {
                                         "type": "action_start",
                                         "session_id": session.session_id,
                                         "action": {
                                             "tool": tc["name"],
-                                            "args": tc.get("args", {}),
+                                            "args": tool_args,
                                             "status": "running",
-                                            "started_at": datetime.now().isoformat(),
+                                            "started_at": started_at,
                                         },
                                     }
 
@@ -973,10 +986,24 @@ class AgentService:
                             if isinstance(tool_msg, ToolMessage):
                                 tool_name = getattr(tool_msg, "name", "unknown")
                                 tool_output = tool_msg.content
-                                tool_input = tool_msg.tool_call_id or {}
+                                tool_call_id = tool_msg.tool_call_id
+
+                                # 从 pending_tool_calls 获取工具调用参数
+                                pending_info = pending_tool_calls.get(tool_call_id, {})
+                                tool_input = pending_info.get("args", {})
+                                started_at = pending_info.get("started_at")
+
+                                # 计算执行耗时
+                                duration_ms = None
+                                if started_at:
+                                    try:
+                                        start_dt = datetime.fromisoformat(started_at)
+                                        duration_ms = int((datetime.now() - start_dt).total_seconds() * 1000)
+                                    except ValueError:
+                                        pass
 
                                 logger.info(
-                                    f"[Agent Tool] 调用完成: tool={tool_name}, result={str(tool_output)[:200]}"
+                                    f"[Agent Tool] 调用完成: tool={tool_name}, args={tool_input}, result={str(tool_output)[:200]}"
                                 )
 
                                 output_str = str(tool_output) if tool_output else ""
@@ -1020,10 +1047,11 @@ class AgentService:
 
                                 actions.append({
                                     "tool": tool_name,
-                                    "args": tool_input if isinstance(tool_input, dict) else {},
+                                    "args": tool_input,
                                     "result": parsed_message,
                                     "status": action_status,
                                     "data": parsed_data,
+                                    "duration_ms": duration_ms,
                                     "command_log_id": command_log_id,
                                 })
 
@@ -1032,10 +1060,11 @@ class AgentService:
                                     "session_id": session.session_id,
                                     "action": {
                                         "tool": tool_name,
-                                        "args": tool_input if isinstance(tool_input, dict) else {},
+                                        "args": tool_input,
                                         "result": parsed_message,
                                         "status": action_status,
                                         "data": parsed_data,
+                                        "duration_ms": duration_ms,
                                         "command_log_id": command_log_id,
                                     },
                                 }
@@ -1044,9 +1073,18 @@ class AgentService:
                             # 处理 AI 回复完成
                             ai_msg = update["messages"][-1]
                             if isinstance(ai_msg, AIMessage) and ai_msg.tool_calls:
-                                # 记录工具调用
+                                # 记录工具调用参数供后续 ToolMessage 使用
                                 for tc in ai_msg.tool_calls:
+                                    tool_call_id = tc.get("id", "")
                                     logger.info(f"[Agent Tool] 工具调用: {tc}")
+
+                                    # 记录到 pending_tool_calls（如果尚未记录）
+                                    if tool_call_id and tool_call_id not in pending_tool_calls:
+                                        pending_tool_calls[tool_call_id] = {
+                                            "name": tc.get("name", "unknown"),
+                                            "args": tc.get("args", {}),
+                                            "started_at": datetime.now().isoformat(),
+                                        }
 
             await self._update_session(session, message, full_reply)
             logger.info(

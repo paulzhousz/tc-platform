@@ -110,9 +110,7 @@ export function useModbusWs() {
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       reconnectAttempts.value++;
-      console.log(
-        `[Modbus WS] Reconnecting... (attempt ${reconnectAttempts.value})`
-      );
+      console.log(`[Modbus WS] Reconnecting... (attempt ${reconnectAttempts.value})`);
       connect();
     }, reconnectInterval);
   }

@@ -44,12 +44,8 @@
               </el-select>
             </el-form-item>
             <el-form-item class="search-buttons">
-              <el-button type="primary" icon="search" native-type="submit">
-                查询
-              </el-button>
-              <el-button icon="refresh" @click="handleResetQuery">
-                重置
-              </el-button>
+              <el-button type="primary" icon="search" native-type="submit">查询</el-button>
+              <el-button icon="refresh" @click="handleResetQuery">重置</el-button>
             </el-form-item>
           </el-form>
           <el-button type="success" icon="plus" @click="handleOpenDeviceDialog()">
@@ -279,13 +275,7 @@
       </div>
 
       <!-- 点位表格 -->
-      <el-table
-        v-loading="tagLoading"
-        :data="tagTableData"
-        border
-        stripe
-        size="small"
-      >
+      <el-table v-loading="tagLoading" :data="tagTableData" border stripe size="small">
         <template #empty>
           <el-empty :image-size="60" description="暂无点位数据" />
         </template>
@@ -300,10 +290,7 @@
         <el-table-column prop="unit" label="单位" width="80" />
         <el-table-column prop="access_type" label="访问类型" width="100">
           <template #default="{ row }">
-            <el-tag
-              size="small"
-              :type="row.access_type === 'READ' ? 'warning' : 'success'"
-            >
+            <el-tag size="small" :type="row.access_type === 'READ' ? 'warning' : 'success'">
               {{ row.access_type }}
             </el-tag>
           </template>
@@ -432,11 +419,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="偏移量" prop="offset">
-              <el-input-number
-                v-model="tagFormData.offset"
-                :precision="2"
-                style="width: 100%"
-              />
+              <el-input-number v-model="tagFormData.offset" :precision="2" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -473,10 +456,7 @@ defineOptions({
   inheritAttrs: false,
 });
 
-import DeviceAPI, {
-  type Device,
-  type TagPoint,
-} from "@/api/module_modbus/device";
+import DeviceAPI, { type Device, type TagPoint } from "@/api/module_modbus/device";
 
 // 查询表单
 const queryFormRef = ref();

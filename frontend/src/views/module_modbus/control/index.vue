@@ -1,4 +1,560 @@
 <!-- Modbus 控制页面 - AI 助手对话界面 -->
+<template>
+  <div class="modbus-control-page">
+    <!-- 左侧设备树 -->
+    <div class="device-tree-panel">
+      <div class="panel-header">
+        <h3>设备列表</h3>
+        <span class="online-count">
+          在线: {{ modbusStore.onlineDevices.length }}/{{ modbusStore.devices.length }}
+        </span>
+      </div>
+
+      <!-- 未连接提示 -->
+      <div v-if="!connected" class="not-connected-tip">
+        <Icon icon="mdi:alert-circle-outline" class="tip-icon" />
+        <span>设备未连接</span>
+      </div>
+
+      <!-- 连接控制按钮 -->
+      <div class="connection-controls">
+        <el-button type="primary" :loading="connecting" @click="handleConnect">连接设备</el-button>
+        <el-button
+          type="danger"
+          :loading="disconnecting"
+          :disabled="!connected"
+          @click="handleDisconnect"
+        >
+          断开连接
+        </el-button>
+      </div>
+
+      <!-- 设备树区域 -->
+      <div class="device-tree-content">
+        <el-tree
+          v-if="treeData.length > 0"
+          :data="treeData"
+          :props="{ label: 'label', children: 'children' }"
+          default-expand-all
+          node-key="id"
+          :highlight-current="true"
+          @node-click="onDeviceSelect"
+        >
+          <template #default="{ data }">
+            <span v-if="data.device_status" class="device-tree-node">
+              <Icon
+                :icon="data.device_status === 'online' ? 'mdi:check-circle' : 'mdi:circle-outline'"
+                class="status-icon"
+                :style="{ color: getStatusColor(data.device_status) }"
+              />
+              <span class="device-title" :class="{ offline: data.device_status !== 'online' }">
+                {{ data.label }}
+              </span>
+              <el-button
+                type="primary"
+                size="small"
+                link
+                class="view-status-btn"
+                @click.stop="showDeviceStatus(data.id)"
+              >
+                查看
+              </el-button>
+            </span>
+            <span v-else>{{ data.label }}</span>
+          </template>
+        </el-tree>
+        <el-empty v-else description="暂无设备" :image-size="60" />
+      </div>
+
+      <!-- 图例说明 -->
+      <div class="legend">
+        <span class="legend-item">
+          <Icon icon="mdi:check-circle" class="status-icon" style="color: #52c41a" />
+          <span>在线</span>
+        </span>
+        <span class="legend-item">
+          <Icon icon="mdi:circle-outline" class="status-icon" style="color: #999" />
+          <span>离线</span>
+        </span>
+        <span class="legend-item">
+          <Icon icon="mdi:alert-circle" class="status-icon" style="color: #ff4d4f" />
+          <span>异常</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- 右侧对话区 -->
+    <div class="chat-panel" :class="{ 'with-history': showHistorySidebar }">
+      <!-- 对话头部 -->
+      <div class="chat-header">
+        <div class="chat-title">
+          <el-icon class="title-icon"><ChatDotRound /></el-icon>
+          <span>PLC智能助手</span>
+        </div>
+        <div class="chat-actions">
+          <el-button type="primary" text @click="newChat">
+            <Icon icon="mdi:plus-box-outline" style="margin-right: 4px" />
+            清空会话
+          </el-button>
+          <el-button
+            type="primary"
+            text
+            :class="{ active: showHistorySidebar }"
+            @click="toggleHistorySidebar"
+          >
+            <Icon icon="mdi:format-list-bulleted" style="margin-right: 4px" />
+            {{ showHistorySidebar ? '隐藏历史' : '会话历史' }}
+          </el-button>
+          <el-button
+            type="primary"
+            text
+            :disabled="modbusStore.messages.length === 0"
+            @click="exportChat"
+          >
+            <Icon icon="mdi:download-outline" style="margin-right: 4px" />
+            导出会话
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 主内容区 -->
+      <div class="chat-content-wrapper">
+        <!-- 对话消息列表 -->
+        <div ref="messageListRef" class="message-list">
+          <!-- 欢迎界面（无消息时显示） -->
+          <div v-if="modbusStore.messages.length === 0" class="welcome-screen">
+            <div class="welcome-content">
+              <div class="ai-logo">
+                <el-icon size="64"><ChatDotRound /></el-icon>
+              </div>
+              <h1>PLC智能助手</h1>
+              <p class="welcome-subtitle">
+                我是PLC智能助手，负责将您的自然语言，转化为精确的 PLC 指令。
+              </p>
+
+              <div class="example-prompts">
+                <div
+                  v-for="cmd in quickCommands"
+                  :key="cmd.text"
+                  class="prompt-card"
+                  @click="quickSend(cmd.text)"
+                >
+                  <h4>{{ cmd.label }}</h4>
+                  <p>{{ cmd.text }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 消息列表（有消息时显示） -->
+          <template v-else>
+            <div
+              v-for="(msg, index) in modbusStore.messages"
+              :key="index"
+              class="message-item"
+              :class="[msg.role]"
+            >
+              <!-- 用户消息 -->
+              <template v-if="msg.role === 'user'">
+                <div class="message-avatar user-avatar">
+                  <el-icon><User /></el-icon>
+                </div>
+                <div class="message-body">
+                  <div class="message-header">
+                    <span class="message-role">用户</span>
+                    <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
+                  </div>
+                  <div class="message-bubble user-bubble">
+                    <div class="message-content">{{ msg.content }}</div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 助手消息 -->
+              <template v-else>
+                <div class="message-avatar assistant-avatar">
+                  <el-icon><ChatDotRound /></el-icon>
+                </div>
+                <div class="message-body">
+                  <div class="message-header">
+                    <span class="message-role">PLC智能助手</span>
+                    <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
+                  </div>
+                  <div class="message-bubble assistant-bubble">
+                    <!-- 思考中状态 -->
+                    <div
+                      v-if="
+                        modbusStore.chatLoading &&
+                        index === modbusStore.messages.length - 1 &&
+                        !msg.content &&
+                        !msg.actions?.length
+                      "
+                      class="thinking-indicator"
+                    >
+                      <span class="dot"></span>
+                      <span class="dot"></span>
+                      <span class="dot"></span>
+                      <span class="typing-text">思考中...</span>
+                    </div>
+
+                    <!-- 推理过程 -->
+                    <div v-if="msg.actions?.length" class="reasoning-panel">
+                      <div class="reasoning-header" @click="toggleReasoning(index)">
+                        <span class="reasoning-icon">💭</span>
+                        <span>推理过程</span>
+                        <span class="step-count">({{ msg.actions.length }} 步骤)</span>
+                        <Icon
+                          :icon="
+                            expandedReasonings.includes(index)
+                              ? 'mdi:chevron-up'
+                              : 'mdi:chevron-down'
+                          "
+                          class="expand-icon"
+                        />
+                      </div>
+                      <div v-show="expandedReasonings.includes(index)" class="reasoning-steps">
+                        <div
+                          v-for="(step, si) in msg.actions"
+                          :key="si"
+                          class="reasoning-step"
+                          :class="[`status-${step.status || 'success'}`]"
+                        >
+                          <div class="step-header" @click="toggleStep(index, si)">
+                            <span class="step-icon">{{ getStepIcon(step.tool) }}</span>
+                            <span class="step-name">{{ getToolDisplayName(step.tool) }}</span>
+                            <span
+                              class="step-status"
+                              :style="{ color: getActionStatusColor(step.status) }"
+                            >
+                              <Icon :icon="getActionStatusIcon(step.status)" class="status-icon" />
+                              <span class="status-text">
+                                {{ getActionStatusText(step.status) }}
+                              </span>
+                            </span>
+                            <span v-if="step.duration_ms" class="step-duration">
+                              {{ step.duration_ms }}ms
+                            </span>
+                            <Icon
+                              :icon="
+                                isStepExpanded(index, si) ? 'mdi:chevron-up' : 'mdi:chevron-down'
+                              "
+                              class="step-expand-icon"
+                            />
+                          </div>
+                          <!-- 步骤详情 -->
+                          <div v-show="isStepExpanded(index, si)" class="step-details">
+                            <div
+                              v-if="step.args && Object.keys(step.args).length > 0"
+                              class="step-section"
+                            >
+                              <div class="step-section-title">调用参数</div>
+                              <pre class="step-json">{{ JSON.stringify(step.args, null, 2) }}</pre>
+                            </div>
+                            <div v-if="step.data" class="step-section">
+                              <div class="step-section-title">执行结果</div>
+                              <div class="step-data">
+                                <!-- 读取结果 -->
+                                <template v-if="step.tool === 'read_plc' && step.data">
+                                  <div v-if="step.data.device_name" class="data-row">
+                                    <span class="data-label">设备:</span>
+                                    <span class="data-value">{{ step.data.device_name }}</span>
+                                  </div>
+                                  <div v-if="step.data.tag_name" class="data-row">
+                                    <span class="data-label">点位:</span>
+                                    <span class="data-value">{{ step.data.tag_name }}</span>
+                                  </div>
+                                  <div
+                                    v-if="step.data.value !== undefined"
+                                    class="data-row highlight"
+                                  >
+                                    <span class="data-label">当前值:</span>
+                                    <span class="data-value">
+                                      {{ step.data.value }} {{ step.data.unit || "" }}
+                                    </span>
+                                  </div>
+                                </template>
+                                <!-- 写入/调整结果 -->
+                                <template
+                                  v-else-if="
+                                    (step.tool === 'write_plc' || step.tool === 'adjust_plc') &&
+                                    step.data
+                                  "
+                                >
+                                  <div v-if="step.data.device_name" class="data-row">
+                                    <span class="data-label">设备:</span>
+                                    <span class="data-value">{{ step.data.device_name }}</span>
+                                  </div>
+                                  <div v-if="step.data.tag_name" class="data-row">
+                                    <span class="data-label">点位:</span>
+                                    <span class="data-value">{{ step.data.tag_name }}</span>
+                                  </div>
+                                  <div
+                                    v-if="step.data.value !== undefined"
+                                    class="data-row highlight"
+                                  >
+                                    <span class="data-label">写入值:</span>
+                                    <span class="data-value">
+                                      {{ step.data.value }} {{ step.data.unit || "" }}
+                                    </span>
+                                  </div>
+                                </template>
+                                <!-- 其他情况 -->
+                                <template v-else>
+                                  <pre class="step-json">{{
+                                    JSON.stringify(step.data, null, 2)
+                                  }}</pre>
+                                </template>
+                              </div>
+                            </div>
+                            <!-- 错误信息 -->
+                            <div v-if="step.error" class="step-error">
+                              <Icon icon="mdi:alert-circle" class="error-icon" />
+                              <span>{{ step.error }}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- 加载指示 -->
+                        <div
+                          v-if="
+                            modbusStore.chatLoading && index === modbusStore.messages.length - 1
+                          "
+                          class="reasoning-loading"
+                        >
+                          <span class="dot"></span>
+                          <span class="dot"></span>
+                          <span class="dot"></span>
+                          <span class="typing-text">执行中...</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 回复内容 -->
+                    <div class="message-content-wrapper">
+                      <div
+                        v-if="msg.content"
+                        class="message-content markdown-body"
+                        v-html="renderMarkdown(msg.content)"
+                      ></div>
+                      <!-- 打字机光标 -->
+                      <span
+                        v-if="modbusStore.chatLoading && index === modbusStore.messages.length - 1"
+                        class="typewriter-cursor"
+                        :class="{ hidden: !cursorVisible }"
+                      ></span>
+                    </div>
+
+                    <!-- 消息操作按钮 -->
+                    <div v-if="msg.content" class="message-actions">
+                      <el-tooltip content="复制" placement="bottom">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          text
+                          @click="copyMessage(msg.content)"
+                        >
+                          <Icon icon="mdi:content-copy" />
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip content="重新生成" placement="bottom">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          text
+                          @click="regenerateMessage(index)"
+                        >
+                          <Icon icon="mdi:refresh" />
+                        </el-button>
+                      </el-tooltip>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- 历史对话侧边栏 -->
+        <Transition name="slide-fade">
+          <div v-if="showHistorySidebar" class="history-sidebar">
+            <div class="history-sidebar-header">
+              <span class="history-title">历史记录</span>
+              <el-button
+                v-if="modbusStore.chatHistory.length > 0"
+                size="small"
+                type="danger"
+                text
+                @click="modbusStore.chatHistory = []"
+              >
+                <Icon icon="mdi:delete-outline" />
+              </el-button>
+            </div>
+            <div v-if="modbusStore.chatHistory.length > 0" class="history-list">
+              <div
+                v-for="session in modbusStore.chatHistory"
+                :key="session.sessionId"
+                class="history-item"
+                :class="{ active: selectedHistorySession?.sessionId === session.sessionId }"
+                @click="onHistoryClick(session)"
+              >
+                <div class="history-info">
+                  <div class="history-preview">{{ session.title || "AI 对话" }}</div>
+                  <div class="history-meta">
+                    <span class="history-time">{{ formatTime(session.startTime) }}</span>
+                  </div>
+                </div>
+                <el-button
+                  type="primary"
+                  size="small"
+                  text
+                  class="delete-btn"
+                  @click.stop="deleteHistorySession(session.sessionId)"
+                >
+                  <Icon icon="mdi:close" />
+                </el-button>
+              </div>
+            </div>
+            <el-empty v-else description="暂无历史记录" :image-size="60" />
+          </div>
+        </Transition>
+      </div>
+
+      <!-- 输入区域 -->
+      <div class="input-area">
+        <div class="input-wrapper">
+          <el-input
+            v-model="inputMessage"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            placeholder="输入消息，按 Enter 发送，Shift+Enter 换行"
+            :disabled="modbusStore.chatLoading"
+            @keydown.enter="onInputEnter"
+          />
+          <div class="input-actions">
+            <!-- 语音输入实时结果 -->
+            <div v-if="voiceRecording && voiceTempResult" class="voice-temp-result">
+              {{ voiceTempResult }}
+            </div>
+            <!-- 语音输入按钮 -->
+            <el-tooltip :content="voiceRecording ? '停止录音' : '语音输入'" placement="top">
+              <el-button
+                type="primary"
+                text
+                :class="{ 'voice-recording': voiceRecording }"
+                @click="toggleVoiceRecording"
+              >
+                <Icon :icon="voiceRecording ? 'mdi:stop-circle' : 'mdi:microphone'" />
+              </el-button>
+            </el-tooltip>
+          </div>
+        </div>
+        <div class="send-actions">
+          <el-button v-if="modbusStore.chatLoading" type="danger" @click="stopGeneration">
+            <Icon icon="mdi:stop" style="margin-right: 4px" />
+            停止
+          </el-button>
+          <el-button v-else type="primary" :disabled="!inputMessage.trim()" @click="sendMessage">
+            <Icon icon="mdi:send" style="margin-right: 4px" />
+            发送
+          </el-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设备状态抽屉 -->
+    <el-drawer v-model="deviceDrawerVisible" title="设备状态" direction="rtl" size="400px">
+      <div v-if="selectedDevice" class="device-status-content">
+        <el-descriptions :column="1" border size="small">
+          <el-descriptions-item label="设备名称">
+            {{ selectedDevice.name }}
+          </el-descriptions-item>
+          <el-descriptions-item label="设备编码">
+            {{ selectedDevice.code }}
+          </el-descriptions-item>
+          <el-descriptions-item label="连接类型">
+            {{ selectedDevice.connection_type }}
+          </el-descriptions-item>
+          <el-descriptions-item label="IP地址">
+            {{ selectedDevice.host }}:{{ selectedDevice.port }}
+          </el-descriptions-item>
+          <el-descriptions-item label="从站ID">
+            {{ selectedDevice.slave_id }}
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="getStatusType(selectedDevice.device_status)">
+              {{ getStatusText(selectedDevice.device_status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="最后在线">
+            {{ selectedDevice.last_seen ? formatTime(selectedDevice.last_seen) : "-" }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 设备操作按钮 -->
+        <div class="device-action-section">
+          <el-button
+            v-if="selectedDevice.device_status === 'online'"
+            type="danger"
+            :loading="deviceDisconnecting"
+            @click="handleDisconnectDevice(selectedDevice)"
+          >
+            断开设备
+          </el-button>
+          <el-button
+            v-else
+            type="primary"
+            :loading="deviceConnecting"
+            @click="handleConnectDevice(selectedDevice)"
+          >
+            连接设备
+          </el-button>
+        </div>
+
+        <!-- 点位列表 -->
+        <div class="tag-points-section">
+          <h4>点位列表</h4>
+          <div v-loading="tagLoading">
+            <el-collapse v-model="expandedGroupKey" accordion @change="handleGroupExpand">
+              <el-collapse-item
+                v-for="group in groupedTags"
+                :key="group.key"
+                :name="group.key"
+                :title="`${group.label} (${group.tags.length})`"
+              >
+                <el-table v-if="group.tags.length > 0" :data="group.tags" size="small" border>
+                  <el-table-column prop="name" label="名称" min-width="100" />
+                  <el-table-column label="当前值" width="100">
+                    <template #default="{ row }">
+                      {{ row.current_value ?? "-" }} {{ row.unit || "" }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="address" label="地址" width="80" />
+                  <el-table-column prop="access_type" label="访问" width="80" />
+                </el-table>
+                <el-empty v-else description="暂无数据" :image-size="40" />
+              </el-collapse-item>
+            </el-collapse>
+            <el-empty v-if="groupedTags.length === 0" description="暂无点位数据" :image-size="60" />
+          </div>
+        </div>
+      </div>
+    </el-drawer>
+
+    <!-- 加载历史确认弹窗 -->
+    <el-dialog
+      v-model="confirmLoadDialogVisible"
+      title="加载历史对话"
+      width="400px"
+      @confirm="confirmLoadHistory"
+    >
+      <p>加载历史对话将替换当前对话，是否继续？</p>
+      <template #footer>
+        <el-button @click="cancelLoadHistory">取消</el-button>
+        <el-button type="primary" @click="confirmLoadHistory">确认</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
@@ -11,6 +567,7 @@ import { useModbusWs } from "@/composables/modbus/use-modbus-ws";
 import { useFunASRWs } from "@/composables/modbus/use-funasr-ws";
 import { useTypewriter } from "@/composables/modbus/use-typewriter";
 import { Icon } from "@iconify/vue";
+import { User, ChatDotRound } from "@element-plus/icons-vue";
 
 const modbusStore = useModbusStore();
 
@@ -162,8 +719,7 @@ async function handleConnect() {
     if (!data) return;
 
     const results = data.results || [];
-    const failedCount = results.filter((r: { success: boolean }) => !r.success)
-      .length;
+    const failedCount = results.filter((r: { success: boolean }) => !r.success).length;
 
     if (failedCount === results.length) {
       return;
@@ -173,7 +729,9 @@ async function handleConnect() {
 
     // 立即更新成功连接的设备状态（参考 handleConnectDevice 的模式）
     // 避免 loadDevices() 的竞态条件：WebSocket 推送可能先到达，loadDevices 返回陈旧数据覆盖正确状态
-    const successResults = results.filter((r: { success: boolean; device_id: number }) => r.success);
+    const successResults = results.filter(
+      (r: { success: boolean; device_id: number }) => r.success
+    );
     for (const r of successResults) {
       modbusStore.updateDeviceStatus(r.device_id, "online", new Date().toISOString());
     }
@@ -234,9 +792,7 @@ async function handleConnectDevice(device: Device) {
     if (!data) return;
 
     const results = data.results || [];
-    const deviceResult = results.find(
-      (r: { device_id: number }) => r.device_id === device.id
-    );
+    const deviceResult = results.find((r: { device_id: number }) => r.device_id === device.id);
 
     if (deviceResult?.success) {
       // 立即更新 store 中的设备状态，确保 UI 即时响应
@@ -310,9 +866,7 @@ async function checkConnectionStatus(): Promise<boolean> {
   try {
     const result = await ControlAPI.getConnectionStatus();
     const status = result.data.data || [];
-    const hasConnected = status.some(
-      (s: { connected: boolean }) => s.connected
-    );
+    const hasConnected = status.some((s: { connected: boolean }) => s.connected);
     if (hasConnected) {
       connected.value = true;
     } else {
@@ -762,525 +1316,6 @@ onMounted(async () => {
 });
 </script>
 
-<template>
-  <div class="modbus-control-page">
-    <!-- 左侧设备树 -->
-    <div class="device-tree-panel">
-      <div class="panel-header">
-        <h3>设备列表</h3>
-        <span class="online-count">
-          在线: {{ modbusStore.onlineDevices.length }}/{{
-            modbusStore.devices.length
-          }}
-        </span>
-      </div>
-
-      <!-- 未连接提示 -->
-      <div v-if="!connected" class="not-connected-tip">
-        <Icon icon="mdi:alert-circle-outline" class="tip-icon" />
-        <span>设备未连接</span>
-      </div>
-
-      <!-- 连接控制按钮 -->
-      <div class="connection-controls">
-        <el-button type="primary" :loading="connecting" @click="handleConnect">
-          连接设备
-        </el-button>
-        <el-button
-          type="danger"
-          :loading="disconnecting"
-          :disabled="!connected"
-          @click="handleDisconnect"
-        >
-          断开连接
-        </el-button>
-      </div>
-
-      <!-- 设备树区域 -->
-      <div class="device-tree-content">
-        <el-tree
-          v-if="treeData.length > 0"
-          :data="treeData"
-          :props="{ label: 'label', children: 'children' }"
-          default-expand-all
-          node-key="id"
-          :highlight-current="true"
-          @node-click="onDeviceSelect"
-        >
-          <template #default="{ data }">
-            <span v-if="data.device_status" class="device-tree-node">
-              <Icon
-                :icon="data.device_status === 'online' ? 'mdi:check-circle' : 'mdi:circle-outline'"
-                class="status-icon"
-                :style="{ color: getStatusColor(data.device_status) }"
-              />
-              <span class="device-title" :class="{ offline: data.device_status !== 'online' }">
-                {{ data.label }}
-              </span>
-              <el-button
-                type="primary"
-                size="small"
-                link
-                class="view-status-btn"
-                @click.stop="showDeviceStatus(data.id)"
-              >
-                查看
-              </el-button>
-            </span>
-            <span v-else>{{ data.label }}</span>
-          </template>
-        </el-tree>
-        <el-empty v-else description="暂无设备" :image-size="60" />
-      </div>
-
-      <!-- 图例说明 -->
-      <div class="legend">
-        <span class="legend-item">
-          <Icon icon="mdi:check-circle" class="status-icon" style="color: #52c41a" />
-          <span>在线</span>
-        </span>
-        <span class="legend-item">
-          <Icon icon="mdi:circle-outline" class="status-icon" style="color: #999" />
-          <span>离线</span>
-        </span>
-        <span class="legend-item">
-          <Icon icon="mdi:alert-circle" class="status-icon" style="color: #ff4d4f" />
-          <span>异常</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- 右侧对话区 -->
-    <div class="chat-panel" :class="{ 'with-history': showHistorySidebar }">
-      <!-- 对话头部 -->
-      <div class="chat-header">
-        <div class="chat-title">
-          <Icon icon="mdi:robot-outline" class="title-icon" />
-          <span>AI 助手</span>
-        </div>
-        <div class="chat-actions">
-          <el-tooltip content="新对话" placement="bottom">
-            <el-button type="primary" text @click="newChat">
-              <Icon icon="mdi:plus-box-outline" />
-            </el-button>
-          </el-tooltip>
-          <el-tooltip
-            :content="showHistorySidebar ? '隐藏历史' : '历史记录'"
-            placement="bottom"
-          >
-            <el-button
-              type="primary"
-              text
-              :class="{ active: showHistorySidebar }"
-              @click="toggleHistorySidebar"
-            >
-              <Icon icon="mdi:format-list-bulleted" />
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="导出对话" placement="bottom">
-            <el-button
-              type="primary"
-              text
-              :disabled="modbusStore.messages.length === 0"
-              @click="exportChat"
-            >
-              <Icon icon="mdi:download-outline" />
-            </el-button>
-          </el-tooltip>
-        </div>
-      </div>
-
-      <!-- 主内容区 -->
-      <div class="chat-content-wrapper">
-        <!-- 对话消息列表 -->
-        <div ref="messageListRef" class="message-list">
-          <div
-            v-for="(msg, index) in modbusStore.messages"
-            :key="index"
-            class="message-item"
-            :class="[msg.role]"
-          >
-            <!-- 用户消息 -->
-            <template v-if="msg.role === 'user'">
-              <div class="message-avatar user-avatar">
-                <Icon icon="mdi:account-circle" class="avatar-icon" />
-              </div>
-              <div class="message-body">
-                <div class="message-header">
-                  <span class="message-role">用户</span>
-                  <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
-                </div>
-                <div class="message-bubble user-bubble">
-                  <div class="message-content">{{ msg.content }}</div>
-                </div>
-              </div>
-            </template>
-
-            <!-- 助手消息 -->
-            <template v-else>
-              <div class="message-avatar assistant-avatar">
-                <Icon icon="mdi:robot-outline" class="avatar-icon" />
-              </div>
-              <div class="message-body">
-                <div class="message-header">
-                  <span class="message-role">AI 助手</span>
-                  <span class="message-time">{{ formatMessageTime(msg.timestamp) }}</span>
-                </div>
-                <div class="message-bubble assistant-bubble">
-                  <!-- 思考中状态 -->
-                  <div
-                    v-if="modbusStore.chatLoading && index === modbusStore.messages.length - 1 && !msg.content && !msg.actions?.length"
-                    class="thinking-indicator"
-                  >
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                    <span class="dot"></span>
-                    <span class="typing-text">思考中...</span>
-                  </div>
-
-                  <!-- 推理过程 -->
-                  <div v-if="msg.actions?.length" class="reasoning-panel">
-                    <div class="reasoning-header" @click="toggleReasoning(index)">
-                      <span class="reasoning-icon">💭</span>
-                      <span>推理过程</span>
-                      <span class="step-count">({{ msg.actions.length }} 步骤)</span>
-                      <Icon
-                        :icon="expandedReasonings.includes(index) ? 'mdi:chevron-up' : 'mdi:chevron-down'"
-                        class="expand-icon"
-                      />
-                    </div>
-                    <div v-show="expandedReasonings.includes(index)" class="reasoning-steps">
-                      <div
-                        v-for="(step, si) in msg.actions"
-                        :key="si"
-                        class="reasoning-step"
-                        :class="[`status-${step.status || 'success'}`]"
-                      >
-                        <div class="step-header" @click="toggleStep(index, si)">
-                          <span class="step-icon">{{ getStepIcon(step.tool) }}</span>
-                          <span class="step-name">{{ getToolDisplayName(step.tool) }}</span>
-                          <span class="step-status" :style="{ color: getActionStatusColor(step.status) }">
-                            <Icon :icon="getActionStatusIcon(step.status)" class="status-icon" />
-                            <span class="status-text">{{ getActionStatusText(step.status) }}</span>
-                          </span>
-                          <span v-if="step.duration_ms" class="step-duration">{{ step.duration_ms }}ms</span>
-                          <Icon
-                            :icon="isStepExpanded(index, si) ? 'mdi:chevron-up' : 'mdi:chevron-down'"
-                            class="step-expand-icon"
-                          />
-                        </div>
-                        <!-- 步骤详情 -->
-                        <div v-show="isStepExpanded(index, si)" class="step-details">
-                          <div v-if="step.args && Object.keys(step.args).length > 0" class="step-section">
-                            <div class="step-section-title">调用参数</div>
-                            <pre class="step-json">{{ JSON.stringify(step.args, null, 2) }}</pre>
-                          </div>
-                          <div v-if="step.data" class="step-section">
-                            <div class="step-section-title">执行结果</div>
-                            <div class="step-data">
-                              <!-- 读取结果 -->
-                              <template v-if="step.tool === 'read_plc' && step.data">
-                                <div v-if="step.data.device_name" class="data-row">
-                                  <span class="data-label">设备:</span>
-                                  <span class="data-value">{{ step.data.device_name }}</span>
-                                </div>
-                                <div v-if="step.data.tag_name" class="data-row">
-                                  <span class="data-label">点位:</span>
-                                  <span class="data-value">{{ step.data.tag_name }}</span>
-                                </div>
-                                <div v-if="step.data.value !== undefined" class="data-row highlight">
-                                  <span class="data-label">当前值:</span>
-                                  <span class="data-value">
-                                    {{ step.data.value }} {{ step.data.unit || "" }}
-                                  </span>
-                                </div>
-                              </template>
-                              <!-- 写入/调整结果 -->
-                              <template v-else-if="(step.tool === 'write_plc' || step.tool === 'adjust_plc') && step.data">
-                                <div v-if="step.data.device_name" class="data-row">
-                                  <span class="data-label">设备:</span>
-                                  <span class="data-value">{{ step.data.device_name }}</span>
-                                </div>
-                                <div v-if="step.data.tag_name" class="data-row">
-                                  <span class="data-label">点位:</span>
-                                  <span class="data-value">{{ step.data.tag_name }}</span>
-                                </div>
-                                <div v-if="step.data.value !== undefined" class="data-row highlight">
-                                  <span class="data-label">写入值:</span>
-                                  <span class="data-value">
-                                    {{ step.data.value }} {{ step.data.unit || "" }}
-                                  </span>
-                                </div>
-                              </template>
-                              <!-- 其他情况 -->
-                              <template v-else>
-                                <pre class="step-json">{{ JSON.stringify(step.data, null, 2) }}</pre>
-                              </template>
-                            </div>
-                          </div>
-                          <!-- 错误信息 -->
-                          <div v-if="step.error" class="step-error">
-                            <Icon icon="mdi:alert-circle" class="error-icon" />
-                            <span>{{ step.error }}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <!-- 加载指示 -->
-                      <div
-                        v-if="modbusStore.chatLoading && index === modbusStore.messages.length - 1"
-                        class="reasoning-loading"
-                      >
-                        <span class="dot"></span>
-                        <span class="dot"></span>
-                        <span class="dot"></span>
-                        <span class="typing-text">执行中...</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 回复内容 -->
-                  <div class="message-content-wrapper">
-                    <div
-                      v-if="msg.content"
-                      class="message-content markdown-body"
-                      v-html="renderMarkdown(msg.content)"
-                    ></div>
-                    <!-- 打字机光标 -->
-                    <span
-                      v-if="modbusStore.chatLoading && index === modbusStore.messages.length - 1"
-                      class="typewriter-cursor"
-                      :class="{ hidden: !cursorVisible }"
-                    ></span>
-                  </div>
-
-                  <!-- 消息操作按钮 -->
-                  <div v-if="msg.content" class="message-actions">
-                    <el-tooltip content="复制" placement="bottom">
-                      <el-button type="primary" size="small" text @click="copyMessage(msg.content)">
-                        <Icon icon="mdi:content-copy" />
-                      </el-button>
-                    </el-tooltip>
-                    <el-tooltip content="重新生成" placement="bottom">
-                      <el-button type="primary" size="small" text @click="regenerateMessage(index)">
-                        <Icon icon="mdi:refresh" />
-                      </el-button>
-                    </el-tooltip>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <!-- 历史对话侧边栏 -->
-        <Transition name="slide-fade">
-          <div v-if="showHistorySidebar" class="history-sidebar">
-            <div class="history-sidebar-header">
-              <span class="history-title">历史记录</span>
-              <el-button
-                v-if="modbusStore.chatHistory.length > 0"
-                size="small"
-                type="danger"
-                text
-                @click="modbusStore.chatHistory = []"
-              >
-                <Icon icon="mdi:delete-outline" />
-              </el-button>
-            </div>
-            <div v-if="modbusStore.chatHistory.length > 0" class="history-list">
-              <div
-                v-for="session in modbusStore.chatHistory"
-                :key="session.sessionId"
-                class="history-item"
-                :class="{ active: selectedHistorySession?.sessionId === session.sessionId }"
-                @click="onHistoryClick(session)"
-              >
-                <div class="history-info">
-                  <div class="history-preview">{{ session.title || "AI 对话" }}</div>
-                  <div class="history-meta">
-                    <span class="history-time">{{ formatTime(session.startTime) }}</span>
-                  </div>
-                </div>
-                <el-button
-                  type="primary"
-                  size="small"
-                  text
-                  class="delete-btn"
-                  @click.stop="deleteHistorySession(session.sessionId)"
-                >
-                  <Icon icon="mdi:close" />
-                </el-button>
-              </div>
-            </div>
-            <el-empty v-else description="暂无历史记录" :image-size="60" />
-          </div>
-        </Transition>
-      </div>
-
-      <!-- 快捷指令栏 -->
-      <div class="quick-commands">
-        <el-button
-          v-for="cmd in quickCommands"
-          :key="cmd.text"
-          size="small"
-          @click="quickSend(cmd.text)"
-        >
-          {{ cmd.label }}
-        </el-button>
-      </div>
-
-      <!-- 输入区域 -->
-      <div class="input-area">
-        <div class="input-wrapper">
-          <el-input
-            v-model="inputMessage"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="输入消息，按 Enter 发送，Shift+Enter 换行"
-            :disabled="modbusStore.chatLoading"
-            @keydown.enter="onInputEnter"
-          />
-          <div class="input-actions">
-            <!-- 语音输入实时结果 -->
-            <div v-if="voiceRecording && voiceTempResult" class="voice-temp-result">
-              {{ voiceTempResult }}
-            </div>
-            <!-- 语音输入按钮 -->
-            <el-tooltip :content="voiceRecording ? '停止录音' : '语音输入'" placement="top">
-              <el-button
-                type="primary"
-                text
-                :class="{ 'voice-recording': voiceRecording }"
-                @click="toggleVoiceRecording"
-              >
-                <Icon :icon="voiceRecording ? 'mdi:stop-circle' : 'mdi:microphone'" />
-              </el-button>
-            </el-tooltip>
-          </div>
-        </div>
-        <div class="send-actions">
-          <el-button v-if="modbusStore.chatLoading" type="danger" @click="stopGeneration">
-            <Icon icon="mdi:stop" style="margin-right: 4px" />
-            停止
-          </el-button>
-          <el-button
-            v-else
-            type="primary"
-            :disabled="!inputMessage.trim()"
-            @click="sendMessage"
-          >
-            <Icon icon="mdi:send" style="margin-right: 4px" />
-            发送
-          </el-button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 设备状态抽屉 -->
-    <el-drawer
-      v-model="deviceDrawerVisible"
-      title="设备状态"
-      direction="rtl"
-      size="400px"
-    >
-      <div v-if="selectedDevice" class="device-status-content">
-        <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="设备名称">
-            {{ selectedDevice.name }}
-          </el-descriptions-item>
-          <el-descriptions-item label="设备编码">
-            {{ selectedDevice.code }}
-          </el-descriptions-item>
-          <el-descriptions-item label="连接类型">
-            {{ selectedDevice.connection_type }}
-          </el-descriptions-item>
-          <el-descriptions-item label="IP地址">
-            {{ selectedDevice.host }}:{{ selectedDevice.port }}
-          </el-descriptions-item>
-          <el-descriptions-item label="从站ID">
-            {{ selectedDevice.slave_id }}
-          </el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(selectedDevice.device_status)">
-              {{ getStatusText(selectedDevice.device_status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="最后在线">
-            {{ selectedDevice.last_seen ? formatTime(selectedDevice.last_seen) : "-" }}
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <!-- 设备操作按钮 -->
-        <div class="device-action-section">
-          <el-button
-            v-if="selectedDevice.device_status === 'online'"
-            type="danger"
-            :loading="deviceDisconnecting"
-            @click="handleDisconnectDevice(selectedDevice)"
-          >
-            断开设备
-          </el-button>
-          <el-button
-            v-else
-            type="primary"
-            :loading="deviceConnecting"
-            @click="handleConnectDevice(selectedDevice)"
-          >
-            连接设备
-          </el-button>
-        </div>
-
-        <!-- 点位列表 -->
-        <div class="tag-points-section">
-          <h4>点位列表</h4>
-          <div v-loading="tagLoading">
-            <el-collapse v-model="expandedGroupKey" accordion @change="handleGroupExpand">
-              <el-collapse-item
-                v-for="group in groupedTags"
-                :key="group.key"
-                :name="group.key"
-                :title="`${group.label} (${group.tags.length})`"
-              >
-                <el-table
-                  v-if="group.tags.length > 0"
-                  :data="group.tags"
-                  size="small"
-                  border
-                >
-                  <el-table-column prop="name" label="名称" min-width="100" />
-                  <el-table-column label="当前值" width="100">
-                    <template #default="{ row }">
-                      {{ row.current_value ?? "-" }} {{ row.unit || "" }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="address" label="地址" width="80" />
-                  <el-table-column prop="access_type" label="访问" width="80" />
-                </el-table>
-                <el-empty v-else description="暂无数据" :image-size="40" />
-              </el-collapse-item>
-            </el-collapse>
-            <el-empty v-if="groupedTags.length === 0" description="暂无点位数据" :image-size="60" />
-          </div>
-        </div>
-      </div>
-    </el-drawer>
-
-    <!-- 加载历史确认弹窗 -->
-    <el-dialog
-      v-model="confirmLoadDialogVisible"
-      title="加载历史对话"
-      width="400px"
-      @confirm="confirmLoadHistory"
-    >
-      <p>加载历史对话将替换当前对话，是否继续？</p>
-      <template #footer>
-        <el-button @click="cancelLoadHistory">取消</el-button>
-        <el-button type="primary" @click="confirmLoadHistory">确认</el-button>
-      </template>
-    </el-dialog>
-  </div>
-</template>
-
 <style scoped lang="scss">
 .modbus-control-page {
   display: flex;
@@ -1475,26 +1510,22 @@ onMounted(async () => {
   }
 
   .message-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
+    font-size: 14px;
     flex-shrink: 0;
-
-    .avatar-icon {
-      font-size: 22px;
-      color: #fff;
-    }
+    color: white;
 
     &.user-avatar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--el-color-primary);
     }
 
     &.assistant-avatar {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      background: var(--el-color-success);
     }
   }
 
@@ -1530,7 +1561,11 @@ onMounted(async () => {
     position: relative;
 
     &.user-bubble {
-      background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-dark-2) 100%);
+      background: linear-gradient(
+        135deg,
+        var(--el-color-primary) 0%,
+        var(--el-color-primary-dark-2) 100%
+      );
       color: #fff;
       border-bottom-right-radius: 4px;
     }
@@ -1956,14 +1991,75 @@ onMounted(async () => {
   }
 }
 
-// 快捷指令
-.quick-commands {
+// 快捷指令卡片样式（欢迎界面内）
+.example-prompts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  max-width: 600px;
+
+  .prompt-card {
+    padding: 20px;
+    text-align: left;
+    cursor: pointer;
+    border: 1px solid var(--el-border-color-light);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: var(--el-color-primary);
+      box-shadow: var(--el-box-shadow-light);
+      transform: translateY(-2px);
+    }
+
+    h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
+    }
+
+    p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--el-text-color-secondary);
+    }
+  }
+}
+
+// 欢迎界面
+.welcome-screen {
   display: flex;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid #f0f0f0;
-  flex-wrap: wrap;
-  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+
+  .welcome-content {
+    max-width: 800px;
+
+    .ai-logo {
+      margin-bottom: 24px;
+      color: var(--el-color-primary);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
+    }
+
+    .welcome-subtitle {
+      margin-bottom: 32px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--el-text-color-secondary);
+    }
+  }
 }
 
 // 输入区域

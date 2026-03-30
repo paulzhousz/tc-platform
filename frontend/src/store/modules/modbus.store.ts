@@ -207,8 +207,7 @@ export const useModbusStore = defineStore("modbus", {
               // 流式完成
               this.messages[assistantIndex].content =
                 event.reply || this.messages[assistantIndex].content;
-              const finalActions =
-                event.actions || (actions.length > 0 ? actions : undefined);
+              const finalActions = event.actions || (actions.length > 0 ? actions : undefined);
               this.messages[assistantIndex].actions = finalActions;
               this.chatLoading = false;
               this.abortStream = null;
@@ -306,9 +305,7 @@ export const useModbusStore = defineStore("modbus", {
       try {
         await ControlAPI.deleteChatHistory(sessionIdToDelete);
         // 从本地列表中移除
-        const index = this.chatHistory.findIndex(
-          (s) => s.sessionId === sessionIdToDelete
-        );
+        const index = this.chatHistory.findIndex((s) => s.sessionId === sessionIdToDelete);
         if (index > -1) {
           this.chatHistory.splice(index, 1);
         }

@@ -46,7 +46,7 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
     serverUrl = getDefaultFunASRUrl(),
     onResult,
     onError,
-    silenceThreshold = 0.03,  // 提高阈值，避免环境噪音触发
+    silenceThreshold = 0.03, // 提高阈值，避免环境噪音触发
     silenceDuration = 1.5,
   } = options;
 
@@ -245,8 +245,7 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
       // 创建 AudioContext
       const AudioContextClass =
         window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       audioContext = new AudioContextClass();
 
       if (audioContext.state === "suspended") {
@@ -256,7 +255,7 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
       const nativeSampleRate = audioContext.sampleRate;
 
       // 加载 AudioWorklet（使用 Vite base URL，注意 BASE_URL 已包含尾部斜杠）
-      const baseUrl = import.meta.env.BASE_URL.endsWith('/')
+      const baseUrl = import.meta.env.BASE_URL.endsWith("/")
         ? import.meta.env.BASE_URL
         : `${import.meta.env.BASE_URL}/`;
       // 添加时间戳参数破坏缓存，确保加载最新版本
@@ -309,8 +308,7 @@ export function useFunASRWs(options: UseFunASRWsOptions = {}) {
       return true;
     } catch (e: unknown) {
       console.error("启动录音失败:", e);
-      const errorMessage =
-        e instanceof Error ? e.message : "无法访问麦克风";
+      const errorMessage = e instanceof Error ? e.message : "无法访问麦克风";
       onError?.(new Error(errorMessage));
       return false;
     }

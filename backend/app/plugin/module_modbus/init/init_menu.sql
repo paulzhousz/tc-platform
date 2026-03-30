@@ -1,6 +1,6 @@
 -- Modbus 控制模块菜单初始化脚本 (PostgreSQL 版本)
 -- 执行此脚本前请确保已执行数据库迁移
--- 使用方法: docker exec -i postgres psql -U root -d tc-platform < init_menu.sql
+-- 使用方法: docker exec -i postgres psql -U root -d tc-platform < backend/app/plugin/module_modbus/init/init_menu.sql
 
 -- 开始事务
 BEGIN;
@@ -54,8 +54,8 @@ control_menu AS (
         "component_path", "redirect", "hidden", "keep_alive", "always_show", "title", "parent_id", "affix",
         "uuid", "status", "created_time", "updated_time"
     ) SELECT
-        'AI控制', 2, 2, 'module_modbus:control:query', 'el-icon-ChatDotRound', 'ModbusControl', '/modbus/control',
-        'module_modbus/control/index', NULL, false, false, false, 'AI控制', id, false,
+        '智能控制', 2, 2, 'module_modbus:control:query', 'el-icon-ChatDotRound', 'ModbusControl', '/modbus/control',
+        'module_modbus/control/index', NULL, false, false, false, '智能控制', id, false,
         'modbus-menu-control', '0', NOW(), NOW()
     FROM modbus_menu
     RETURNING id

@@ -34,8 +34,4 @@ export type {
 } from "./control";
 
 // Log types
-export type {
-  CommandLog,
-  LogListParams,
-  LogListResult,
-} from "./log";
+export type { CommandLog, LogListParams, LogListResult } from "./log";

@@ -1,7 +1,7 @@
 -- ============================================================
 -- Modbus 控制模块参数配置
 -- 说明：从 settings.py 移至 sys_param 表的运行时可配置项
--- 执行方式：docker exec -i postgres psql -U root -d tc-platform < backend/app/plugin/module_modbus/init_params.sql
+-- 执行方式：docker exec -i postgres psql -U root -d tc-platform < backend/app/plugin/module_modbus/init/init_params.sql
 -- 注意：此脚本可重复执行，已存在的参数不会重复插入
 -- ============================================================
 

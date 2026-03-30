@@ -1,4 +1,206 @@
 <!-- Modbus 操作日志页面 -->
+<template>
+  <div class="app-container">
+    <el-card class="data-table">
+      <template #header>
+        <div class="card-header">
+          <span>操作日志</span>
+        </div>
+        <!-- 筛选区域 -->
+        <div class="search-container">
+          <el-form :inline="true" label-suffix=":">
+            <el-form-item label="设备">
+              <el-select
+                v-model="filterParams.device_id"
+                placeholder="全部设备"
+                style="width: 150px"
+                clearable
+              >
+                <el-option v-for="d in devices" :key="d.id" :value="d.id" :label="d.name" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="操作类型">
+              <el-select
+                v-model="filterParams.action"
+                placeholder="全部类型"
+                style="width: 100px"
+                clearable
+              >
+                <el-option value="READ" label="读取" />
+                <el-option value="WRITE" label="写入" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select
+                v-model="filterParams.status"
+                placeholder="全部状态"
+                style="width: 100px"
+                clearable
+              >
+                <el-option value="success" label="成功" />
+                <el-option value="failed" label="失败" />
+                <el-option value="pending" label="待执行" />
+                <el-option value="cancelled" label="已取消" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="时间范围">
+              <el-date-picker
+                v-model="dateRange"
+                type="datetimerange"
+                range-separator="至"
+                start-placeholder="开始时间"
+                end-placeholder="结束时间"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                @change="onDateChange"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
+              <el-button icon="Refresh" @click="resetFilter">重置</el-button>
+              <el-button icon="Download" @click="exportLogs">导出</el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+      </template>
+
+      <!-- 表格区域 -->
+      <div class="data-table__content">
+        <el-table v-loading="loading" :data="logs" border stripe>
+          <template #empty>
+            <el-empty :image-size="80" description="暂无数据" />
+          </template>
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column prop="device_id" label="设备ID" width="100">
+            <template #default="{ row }">
+              {{ row.device_id || "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="tag_id" label="点位ID" width="100">
+            <template #default="{ row }">
+              {{ row.tag_id || "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="action" label="操作类型" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getActionType(row.action)" size="small">
+                {{ getActionText(row.action) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="request_value" label="请求值" width="100">
+            <template #default="{ row }">
+              {{ row.request_value ?? "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="actual_value" label="实际值" width="100">
+            <template #default="{ row }">
+              {{ row.actual_value ?? "-" }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="getStatusType(row.status)" size="small">
+                {{ getStatusText(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="execution_time" label="执行时间" width="120">
+            <template #default="{ row }">
+              <span v-if="row.execution_time">{{ row.execution_time.toFixed(2) }} ms</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="created_time" label="创建时间" min-width="160">
+            <template #default="{ row }">
+              {{ formatTime(row.created_time) }}
+            </template>
+          </el-table-column>
+          <el-table-column fixed="right" label="操作" align="center" width="100">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" link @click="showDetail(row.id)">
+                详情
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <!-- 分页 -->
+        <div class="pagination-container">
+          <el-pagination
+            v-model:current-page="pagination.page_no"
+            v-model:page-size="pagination.pageSize"
+            :page-sizes="pagination.pageSizes"
+            :total="pagination.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
+          />
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 详情抽屉 -->
+    <el-drawer v-model="detailDrawerVisible" title="日志详情" direction="rtl" size="500px">
+      <div v-loading="detailLoading">
+        <el-descriptions v-if="currentLog" :column="1" border size="small">
+          <el-descriptions-item label="日志ID">
+            {{ currentLog.id }}
+          </el-descriptions-item>
+          <el-descriptions-item label="设备ID">
+            {{ currentLog.device_id || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="点位ID">
+            {{ currentLog.tag_id || "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="操作类型">
+            <el-tag :type="getActionType(currentLog.action)" size="small">
+              {{ getActionText(currentLog.action) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="请求值">
+            {{ currentLog.request_value ?? "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="实际值">
+            {{ currentLog.actual_value ?? "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="getStatusType(currentLog.status)" size="small">
+              {{ getStatusText(currentLog.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="执行时间">
+            {{ currentLog.execution_time ? `${currentLog.execution_time.toFixed(2)} ms` : "-" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="重试次数">
+            {{ currentLog.retry_count }}
+          </el-descriptions-item>
+          <el-descriptions-item label="需要确认">
+            <el-tag :type="currentLog.confirmation_required ? 'warning' : 'info'" size="small">
+              {{ currentLog.confirmation_required ? "是" : "否" }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">
+            {{ formatTime(currentLog.created_time) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="执行时间">
+            {{ formatTime(currentLog.executed_at) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="用户输入">
+            <div class="detail-content">{{ currentLog.user_input || "-" }}</div>
+          </el-descriptions-item>
+          <el-descriptions-item label="AI推理">
+            <div class="detail-content">{{ currentLog.ai_reasoning || "-" }}</div>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="currentLog.error_message" label="错误信息">
+            <div class="error-text">{{ currentLog.error_message }}</div>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-empty v-else description="加载失败" :image-size="60" />
+      </div>
+    </el-drawer>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
 import dayjs from "dayjs";
@@ -184,218 +386,6 @@ onMounted(() => {
   loadLogs();
 });
 </script>
-
-<template>
-  <div class="app-container">
-    <el-card class="data-table">
-      <template #header>
-        <div class="card-header">
-          <span>操作日志</span>
-        </div>
-        <!-- 筛选区域 -->
-        <div class="search-container">
-          <el-form :inline="true" label-suffix=":">
-            <el-form-item label="设备">
-              <el-select
-                v-model="filterParams.device_id"
-                placeholder="全部设备"
-                style="width: 150px"
-                clearable
-              >
-                <el-option
-                  v-for="d in devices"
-                  :key="d.id"
-                  :value="d.id"
-                  :label="d.name"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="操作类型">
-              <el-select
-                v-model="filterParams.action"
-                placeholder="全部类型"
-                style="width: 100px"
-                clearable
-              >
-                <el-option value="READ" label="读取" />
-                <el-option value="WRITE" label="写入" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="状态">
-              <el-select
-                v-model="filterParams.status"
-                placeholder="全部状态"
-                style="width: 100px"
-                clearable
-              >
-                <el-option value="success" label="成功" />
-                <el-option value="failed" label="失败" />
-                <el-option value="pending" label="待执行" />
-                <el-option value="cancelled" label="已取消" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="时间范围">
-              <el-date-picker
-                v-model="dateRange"
-                type="datetimerange"
-                range-separator="至"
-                start-placeholder="开始时间"
-                end-placeholder="结束时间"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                @change="onDateChange"
-              />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" icon="Search" @click="handleQuery">查询</el-button>
-              <el-button icon="Refresh" @click="resetFilter">重置</el-button>
-              <el-button icon="Download" @click="exportLogs">导出</el-button>
-            </el-form-item>
-          </el-form>
-        </div>
-      </template>
-
-      <!-- 表格区域 -->
-      <div class="data-table__content">
-        <el-table v-loading="loading" :data="logs" border stripe>
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="device_id" label="设备ID" width="100">
-            <template #default="{ row }">
-              {{ row.device_id || "-" }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="tag_id" label="点位ID" width="100">
-            <template #default="{ row }">
-              {{ row.tag_id || "-" }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="action" label="操作类型" width="100">
-            <template #default="{ row }">
-              <el-tag :type="getActionType(row.action)" size="small">
-                {{ getActionText(row.action) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="request_value" label="请求值" width="100">
-            <template #default="{ row }">
-              {{ row.request_value ?? "-" }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="actual_value" label="实际值" width="100">
-            <template #default="{ row }">
-              {{ row.actual_value ?? "-" }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态" width="100">
-            <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)" size="small">
-                {{ getStatusText(row.status) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="execution_time" label="执行时间" width="120">
-            <template #default="{ row }">
-              <span v-if="row.execution_time">{{ row.execution_time.toFixed(2) }} ms</span>
-              <span v-else>-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="created_time" label="创建时间" min-width="160">
-            <template #default="{ row }">
-              {{ formatTime(row.created_time) }}
-            </template>
-          </el-table-column>
-          <el-table-column fixed="right" label="操作" align="center" width="100">
-            <template #default="{ row }">
-              <el-button type="primary" size="small" link @click="showDetail(row.id)">
-                详情
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <!-- 分页 -->
-        <div class="pagination-container">
-          <el-pagination
-            v-model:current-page="pagination.page_no"
-            v-model:page-size="pagination.pageSize"
-            :page-sizes="pagination.pageSizes"
-            :total="pagination.total"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handleSizeChange"
-            @current-change="handleCurrentChange"
-          />
-        </div>
-      </div>
-    </el-card>
-
-    <!-- 详情抽屉 -->
-    <el-drawer
-      v-model="detailDrawerVisible"
-      title="日志详情"
-      direction="rtl"
-      size="500px"
-    >
-      <div v-loading="detailLoading">
-        <el-descriptions v-if="currentLog" :column="1" border size="small">
-          <el-descriptions-item label="日志ID">
-            {{ currentLog.id }}
-          </el-descriptions-item>
-          <el-descriptions-item label="设备ID">
-            {{ currentLog.device_id || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="点位ID">
-            {{ currentLog.tag_id || "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="操作类型">
-            <el-tag :type="getActionType(currentLog.action)" size="small">
-              {{ getActionText(currentLog.action) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="请求值">
-            {{ currentLog.request_value ?? "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="实际值">
-            {{ currentLog.actual_value ?? "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(currentLog.status)" size="small">
-              {{ getStatusText(currentLog.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="执行时间">
-            {{ currentLog.execution_time ? `${currentLog.execution_time.toFixed(2)} ms` : "-" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="重试次数">
-            {{ currentLog.retry_count }}
-          </el-descriptions-item>
-          <el-descriptions-item label="需要确认">
-            <el-tag :type="currentLog.confirmation_required ? 'warning' : 'info'" size="small">
-              {{ currentLog.confirmation_required ? "是" : "否" }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="创建时间">
-            {{ formatTime(currentLog.created_time) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="执行时间">
-            {{ formatTime(currentLog.executed_at) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="用户输入">
-            <div class="detail-content">{{ currentLog.user_input || "-" }}</div>
-          </el-descriptions-item>
-          <el-descriptions-item label="AI推理">
-            <div class="detail-content">{{ currentLog.ai_reasoning || "-" }}</div>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="currentLog.error_message" label="错误信息">
-            <div class="error-text">{{ currentLog.error_message }}</div>
-          </el-descriptions-item>
-        </el-descriptions>
-        <el-empty v-else description="加载失败" :image-size="60" />
-      </div>
-    </el-drawer>
-  </div>
-</template>
 
 <style scoped lang="scss">
 .search-container {

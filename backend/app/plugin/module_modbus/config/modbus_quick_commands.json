@@ -22,17 +22,7 @@
         "en": "Read temperature value"
       }
     },
-    {
-      "id": "set_frequency",
-      "label": {
-        "zh": "设置频率",
-        "en": "Set Frequency"
-      },
-      "text": {
-        "zh": "设置频率为30Hz",
-        "en": "Set frequency to 30Hz"
-      }
-    },
+
     {
       "id": "start_device",
       "label": {

@@ -171,9 +171,17 @@ async function handleConnect() {
 
     // 消息由全局拦截器显示
 
+    // 立即更新成功连接的设备状态（参考 handleConnectDevice 的模式）
+    // 避免 loadDevices() 的竞态条件：WebSocket 推送可能先到达，loadDevices 返回陈旧数据覆盖正确状态
+    const successResults = results.filter((r: { success: boolean; device_id: number }) => r.success);
+    for (const r of successResults) {
+      modbusStore.updateDeviceStatus(r.device_id, "online", new Date().toISOString());
+    }
+
     connected.value = true;
     connectWs();
-    await modbusStore.loadDevices();
+    // 移除 loadDevices() 调用，依赖 WebSocket 推送和手动更新保持状态一致
+    // 如果需要获取最新设备列表，应该在 WebSocket 推送完成后或延迟一段时间再刷新
     await modbusStore.loadAllDeviceTagPoints();
   } catch {
     // 错误已在 request 中处理
@@ -198,10 +206,16 @@ async function handleDisconnect() {
     }
 
     await ControlAPI.disconnect();
+
+    // 手动更新所有设备状态为 offline
+    for (const device of modbusStore.devices) {
+      modbusStore.updateDeviceStatus(device.id, "offline", undefined);
+    }
+
     connected.value = false;
-    disconnectWs();
+    // 不调用 disconnectWs()，保持 WebSocket 连接
+    // 页面卸载时会自动断开（onUnmounted）
     modbusStore.clearMessages();
-    await modbusStore.loadDevices();
   } catch {
     // 错误已由全局拦截器处理
   } finally {
@@ -228,6 +242,15 @@ async function handleConnectDevice(device: Device) {
       // 立即更新 store 中的设备状态，确保 UI 即时响应
       // WebSocket 推送会作为后续同步的保障
       modbusStore.updateDeviceStatus(device.id, "online", new Date().toISOString());
+
+      // 同步更新 selectedDevice 引用，确保抽屉显示正确状态
+      if (selectedDevice.value?.id === device.id) {
+        selectedDevice.value = {
+          ...selectedDevice.value,
+          device_status: "online",
+          last_seen: new Date().toISOString(),
+        };
+      }
 
       if (!connected.value) {
         connected.value = true;
@@ -258,12 +281,21 @@ async function handleDisconnectDevice(device: Device) {
       // 立即更新 store 中的设备状态
       modbusStore.updateDeviceStatus(device.id, "offline", undefined);
 
+      // 同步更新 selectedDevice 引用，确保抽屉显示正确状态
+      if (selectedDevice.value?.id === device.id) {
+        selectedDevice.value = {
+          ...selectedDevice.value,
+          device_status: "offline",
+          last_seen: undefined,
+        };
+      }
+
       const hasOtherOnline = modbusStore.devices.some(
         (d) => d.id !== device.id && d.device_status === "online"
       );
       if (!hasOtherOnline) {
         connected.value = false;
-        disconnectWs();
+        // 不调用 disconnectWs()，保持 WebSocket 连接
       }
     }
   } catch {
@@ -274,7 +306,7 @@ async function handleDisconnectDevice(device: Device) {
 }
 
 // 初始化时检查连接状态
-async function checkConnectionStatus() {
+async function checkConnectionStatus(): Promise<boolean> {
   try {
     const result = await ControlAPI.getConnectionStatus();
     const status = result.data.data || [];
@@ -288,10 +320,12 @@ async function checkConnectionStatus() {
         d.device_status = "offline";
       });
     }
+    return hasConnected;
   } catch {
     modbusStore.devices.forEach((d) => {
       d.device_status = "offline";
     });
+    return false;
   }
 }
 
@@ -718,6 +752,10 @@ onMounted(async () => {
     await checkConnectionStatus();
     await loadQuickCommands();
     await loadModbusConfig();
+
+    // 提前初始化 WebSocket 连接，确保第一次点击连接按钮时能接收后端推送
+    // useModbusWs 内部会检查 token，无 token 不会连接
+    connectWs();
   } catch (error) {
     console.error("Failed to initialize modbus control page:", error);
   }

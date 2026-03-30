@@ -280,7 +280,7 @@ class AgentService:
                         }
                         for r in result["results"]
                     ]
-                    self.update_disambiguation_context(
+                    await self.update_disambiguation_context(
                         self._current_session, "device", options
                     )
                     return f"""DISAMBIGUATION_REQUIRED
@@ -323,7 +323,7 @@ class AgentService:
                         for opt in result.get("disambiguation_options", [])
                     ]
                     if options:
-                        self.update_disambiguation_context(
+                        await self.update_disambiguation_context(
                             self._current_session, "tag", options
                         )
                         return f"""DISAMBIGUATION_REQUIRED
@@ -425,7 +425,7 @@ class AgentService:
                     device_name = device.name if device else f"设备{device_id}"
 
                     if self._current_session:
-                        self.update_pending_confirmation(
+                        await self.update_pending_confirmation(
                             self._current_session,
                             device_id=device_id,
                             device_name=device_name,
@@ -504,7 +504,7 @@ class AgentService:
                     device_name = device.name if device else f"设备{device_id}"
 
                     if self._current_session:
-                        self.update_pending_confirmation(
+                        await self.update_pending_confirmation(
                             self._current_session,
                             device_id=device_id,
                             device_name=device_name,
@@ -565,7 +565,7 @@ class AgentService:
                     skip_confirmation=True,
                 )
 
-                self.clear_pending_confirmation(self._current_session)
+                await self.clear_pending_confirmation(self._current_session)
 
                 if result["success"]:
                     logger.info("[Agent Tool] confirm_operation 成功")
@@ -592,7 +592,7 @@ class AgentService:
                 if not pending:
                     return "没有待取消的操作。"
 
-                self.clear_pending_confirmation(self._current_session)
+                await self.clear_pending_confirmation(self._current_session)
                 logger.info("[Agent Tool] cancel_operation 成功")
                 return f"操作已取消: {pending['tag_name']} 的写入操作已取消"
 
@@ -694,7 +694,7 @@ class AgentService:
         session.last_active = datetime.now()
         self.db.commit()
 
-    def update_disambiguation_context(
+    async def update_disambiguation_context(
         self,
         session: AgentSessionModel,
         disambiguation_type: str,
@@ -711,24 +711,24 @@ class AgentService:
 
         session.operation_context = context
         flag_modified(session, "operation_context")
-        self.db.commit()
-        self.db.refresh(session)
+        await self.db.commit()
+        await self.db.refresh(session)
         logger.info(
             f"[Agent] 更新消歧上下文: type={disambiguation_type}, options_count={len(options)}"
         )
 
-    def clear_disambiguation_context(self, session: AgentSessionModel):
+    async def clear_disambiguation_context(self, session: AgentSessionModel):
         """清除消歧上下文"""
         context = session.operation_context or {}
         if "disambiguation_context" in context:
             del context["disambiguation_context"]
             session.operation_context = context
             flag_modified(session, "operation_context")
-            self.db.commit()
-            self.db.refresh(session)
+            await self.db.commit()
+            await self.db.refresh(session)
             logger.info("[Agent] 清除消歧上下文")
 
-    def update_pending_confirmation(
+    async def update_pending_confirmation(
         self,
         session: AgentSessionModel,
         device_id: int,
@@ -754,22 +754,22 @@ class AgentService:
 
         session.operation_context = context
         flag_modified(session, "operation_context")
-        self.db.commit()
-        self.db.refresh(session)
+        await self.db.commit()
+        await self.db.refresh(session)
         logger.info(
             f"[Agent] 更新待确认上下文: device={device_name}, tag={tag_name}, value={value}"
         )
 
-    def clear_pending_confirmation(self, session: AgentSessionModel):
+    async def clear_pending_confirmation(self, session: AgentSessionModel):
         """清除待确认上下文"""
         context = session.operation_context or {}
         if "pending_confirmation" in context:
             del context["pending_confirmation"]
             session.operation_context = context
             flag_modified(session, "operation_context")
-            self.db.commit()
-            self.db.refresh(session)
-            logger.info("[Agent] 清除待确认上下文")
+            await self.db.commit()
+            await self.db.refresh(session)
+        logger.info("[Agent] 清除待确认上下文")
 
     async def chat(
         self, user_id: int, message: str, session_id: str | None = None
@@ -790,9 +790,9 @@ class AgentService:
         if context_hint:
             logger.info(f"[Agent] 上下文提示: {context_hint[:100]}...")
         if should_clear_disambiguation:
-            self.clear_disambiguation_context(session)
+            await self.clear_disambiguation_context(session)
         if should_clear_pending:
-            self.clear_pending_confirmation(session)
+            await self.clear_pending_confirmation(session)
 
         agent_graph = self.create_agent_graph(user_id)
 
@@ -866,9 +866,9 @@ class AgentService:
         if context_hint:
             logger.info(f"[Agent Stream] 上下文提示: {context_hint[:100]}...")
         if should_clear_disambiguation:
-            self.clear_disambiguation_context(session)
+            await self.clear_disambiguation_context(session)
         if should_clear_pending:
-            self.clear_pending_confirmation(session)
+            await self.clear_pending_confirmation(session)
 
         yield {
             "type": "session",

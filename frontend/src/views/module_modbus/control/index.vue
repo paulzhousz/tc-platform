@@ -1780,6 +1780,15 @@ onMounted(async () => {
     list-style-position: outside;
   }
 
+  // 恢复列表项的编号/项目符号（reset.scss 中全局重置了 list-style: none）
+  :deep(ol li) {
+    list-style-type: decimal;
+  }
+
+  :deep(ul li) {
+    list-style-type: disc;
+  }
+
   :deep(code) {
     background: rgba(0, 0, 0, 0.06);
     padding: 2px 6px;

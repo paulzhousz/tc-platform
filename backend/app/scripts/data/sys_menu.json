@@ -3307,7 +3307,7 @@
         "title": "示例管理目录",
         "params": null,
         "affix": false,
-        "redirect": null,
+        "redirect": "/example/demo-group/demo01",
         "description": "示例管理子目录（含示例01）",
         "children": [
           {

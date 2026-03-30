@@ -1,6 +1,6 @@
 # Modbus 控制模块需求规格
 
-> 同步自变更: add-modbus-module (2026-03-28)
+> 同步自变更: add-modbus-module (2026-03-28), modbus-agent-timeout-and-ui-fix (2026-03-30)
 
 ## 1. 功能需求清单
 
@@ -35,6 +35,8 @@
 | FR-CHAT-004 | 点位消歧 | P1 |
 | FR-CHAT-005 | 操作确认机制 | P0 |
 | FR-CHAT-006 | 流式输出 (SSE) | P0 |
+| FR-CHAT-007 | LLM 超时控制 | P0 |
+| FR-CHAT-008 | 推理步骤事件完整发送 | P0 |
 
 ### 1.4 操作日志 (FR-ACTION)
 
@@ -155,3 +157,32 @@
 | 路径 | 描述 |
 |------|------|
 | /api/v1/ws/modbus | WebSocket 连接端点 |
+
+## 4. 增量需求详细规格
+
+### 4.1 FR-CHAT-007: LLM 超时控制
+
+系统 SHALL 为 AI Agent 的 LLM 调用提供超时保护机制，防止请求无限等待影响用户体验。
+
+**配置项：**
+
+| 配置键 | 描述 | 默认值 |
+|--------|------|--------|
+| modbus_llm_request_timeout | LLM API 请求超时 | 60s |
+| modbus_llm_stream_timeout | 流式响应整体超时 | 120s |
+| modbus_tool_execution_timeout | 工具执行超时 | 30s |
+
+**场景说明：**
+
+- Request Timeout：LLM API 请求超过 request_timeout 时，抛出超时异常并返回错误响应
+- Stream Timeout：流式响应超过 stream_timeout 时，发送 `{type: "error"}` SSE 事件并终止迭代
+
+### 4.2 FR-CHAT-008: 推理步骤事件完整发送
+
+系统 SHALL 在消歧流程中正确发送 action_start 事件，确保前端能显示推理步骤状态。
+
+**实现要点：**
+
+- 在 messages 分支（tool_call_chunks）和 updates 分支（model tool_calls）均发送 action_start
+- 使用 pending_tool_calls 字典统一管理工具调用参数
+- action_end 事件从 pending_tool_calls 获取完整 args 参数

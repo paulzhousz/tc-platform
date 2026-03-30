@@ -183,6 +183,25 @@ export const useModbusStore = defineStore("modbus", {
             // 处理流式事件
             if (event.type === "session" && event.session_id) {
               this.sessionId = event.session_id;
+            } else if (event.type === "disambiguation_resolved") {
+              // 消歧完成，更新上一条助手消息中状态为 pending 的步骤
+              for (let i = this.messages.length - 2; i >= 0; i--) {
+                const msg = this.messages[i];
+                if (msg.role === "assistant" && msg.actions) {
+                  let updated = false;
+                  for (const action of msg.actions) {
+                    if (action.status === "pending") {
+                      action.status = "success";
+                      updated = true;
+                    }
+                  }
+                  if (updated) {
+                    // 触发响应式更新
+                    this.messages[i] = { ...msg };
+                  }
+                  break; // 只更新最近一条助手消息
+                }
+              }
             } else if (event.type === "token" && event.content) {
               // 更新消息内容
               this.messages[assistantIndex].content += event.content;

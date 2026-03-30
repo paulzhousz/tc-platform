@@ -5,6 +5,7 @@ LLM Agent 服务
 支持设备搜索、点位操作、消歧确认等功能。
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -280,7 +281,10 @@ class AgentService:
                 result = await plc_service.search_devices(keyword)
                 if not result["results"]:
                     logger.info("[Agent Tool] search_device 未找到结果")
-                    return f"未找到匹配的设备。{result.get('disambiguation_hint', '')}"
+                    return json.dumps({
+                        "status": "failed",
+                        "reply": "未找到匹配的设备",
+                    }, ensure_ascii=False)
 
                 logger.info(
                     f"[Agent Tool] search_device 找到 {len(result['results'])} 个结果, disambiguation_needed={result['disambiguation_needed']}"
@@ -298,13 +302,12 @@ class AgentService:
                     await self.update_disambiguation_context(
                         self._current_session, "device", options
                     )
-                    return f"""DISAMBIGUATION_REQUIRED
-
-检测到多个设备匹配，必须等待用户选择。
-
-{result['disambiguation_hint']}
-
-【重要】你必须停止执行，将以上选项展示给用户，等待用户回复编号或设备名称。不要自己猜测或选择设备！"""
+                    # 返回标准格式的消歧提示，不包含指令性文字
+                    options_text = "\n".join([f"{i+1}. {r['device_name']}" for i, r in enumerate(result["results"])])
+                    return json.dumps({
+                        "status": "pending",
+                        "reply": f"检测到多个设备匹配，请选择：\n{options_text}",
+                    }, ensure_ascii=False)
 
                 return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -341,14 +344,18 @@ class AgentService:
                         await self.update_disambiguation_context(
                             self._current_session, "tag", options
                         )
-                        return f"""DISAMBIGUATION_REQUIRED
-
-{result['disambiguation_hint']}
-
-【重要】你必须停止执行，将以上选项展示给用户，等待用户回复编号或点位名称。不要自己猜测！"""
+                        # 返回标准格式的消歧提示，不包含指令性文字
+                        options_text = "\n".join([f"{i+1}. {opt['tag_name']}" for i, opt in enumerate(result.get("disambiguation_options", []))])
+                        return json.dumps({
+                            "status": "pending",
+                            "reply": f"检测到多个点位匹配，请选择：\n{options_text}",
+                        }, ensure_ascii=False)
 
                 if not result["results"]:
-                    return f"在该设备中未找到匹配的功能点。{result.get('disambiguation_hint', '')}"
+                    return json.dumps({
+                        "status": "failed",
+                        "reply": f"在该设备中未找到匹配的功能点",
+                    }, ensure_ascii=False)
 
                 return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -367,18 +374,22 @@ class AgentService:
                 result = await plc_service.read(device_id, tag_name, user_id)
                 if result["success"]:
                     logger.info(f"[Agent Tool] read_plc 成功, value={result['value']}")
+                    device_name = result.get("device_name", f"设备{device_id}")
+                    tag_name_result = result.get("tag_name", tag_name)
+                    value = result.get("value")
+                    unit = result.get("unit", "")
                     return json.dumps(
                         {
-                            "message": f"读取成功: {result['value']} {result.get('unit', '')}",
                             "status": "success",
+                            "reply": f"{device_name}的{tag_name_result}当前为 {value}{unit}",
                             "data": {
                                 "device_id": result.get("device_id"),
-                                "device_name": result.get("device_name"),
+                                "device_name": device_name,
                                 "tag_id": result.get("tag_id"),
-                                "tag_name": result.get("tag_name"),
-                                "value": result.get("value"),
+                                "tag_name": tag_name_result,
+                                "value": value,
                                 "raw_value": result.get("raw_value"),
-                                "unit": result.get("unit"),
+                                "unit": unit,
                                 "min_value": result.get("min_value"),
                                 "max_value": result.get("max_value"),
                             },
@@ -390,8 +401,8 @@ class AgentService:
                 logger.warning(f"[Agent Tool] read_plc 失败, message={result['message']}")
                 return json.dumps(
                     {
-                        "message": f"读取失败: {result['message']}",
                         "status": "failed",
+                        "reply": f"操作失败：{result['message']}",
                     },
                     ensure_ascii=False,
                 )
@@ -412,19 +423,23 @@ class AgentService:
                 result = await plc_service.write(device_id, tag_name, value, user_id)
                 if result["success"]:
                     logger.info(f"[Agent Tool] write_plc 成功, value={result['value']}")
+                    device_name = result.get("device_name", f"设备{device_id}")
+                    tag_name_result = result.get("tag_name", tag_name)
+                    value_result = result.get("value")
+                    unit = result.get("unit", "")
                     return json.dumps(
                         {
-                            "message": f"写入成功: {result['value']} {result.get('unit', '')}",
                             "status": "success",
+                            "reply": f"已将{device_name}的{tag_name_result}设为 {value_result}{unit}",
                             "data": {
                                 "device_id": result.get("device_id"),
-                                "device_name": result.get("device_name"),
+                                "device_name": device_name,
                                 "tag_id": result.get("tag_id"),
-                                "tag_name": result.get("tag_name"),
-                                "value": result.get("value"),
+                                "tag_name": tag_name_result,
+                                "value": value_result,
                                 "request_value": result.get("request_value"),
                                 "actual_value": result.get("actual_value"),
-                                "unit": result.get("unit"),
+                                "unit": unit,
                             },
                             "duration_ms": result.get("execution_time_ms"),
                             "command_log_id": result.get("command_log_id"),
@@ -449,25 +464,15 @@ class AgentService:
                             operation="write",
                         )
 
-                    return f"""CONFIRMATION_REQUIRED
-
-操作需要用户确认，已记录待确认状态。
-
-即将执行操作：
-- 设备：{device_name}
-- 点位：{tag_name}
-- 目标值：{value}
-
-请将以下选项展示给用户，等待用户回复：
-1. 确认执行
-2. 取消
-
-【重要】你只需要展示选项，不要自己调用 confirm_operation 或 cancel_operation。等待用户回复后，下一轮对话再根据用户选择调用相应工具。"""
+                    return json.dumps({
+                        "status": "pending",
+                        "reply": f"即将执行操作：\n- 设备：{device_name}\n- 点位：{tag_name}\n- 目标值：{value}\n\n请选择：\n1. 确认执行\n2. 取消",
+                    }, ensure_ascii=False)
                 logger.warning(f"[Agent Tool] write_plc 失败, message={result['message']}")
                 return json.dumps(
                     {
-                        "message": f"写入失败: {result['message']}",
                         "status": "failed",
+                        "reply": f"操作失败：{result['message']}",
                     },
                     ensure_ascii=False,
                 )
@@ -488,19 +493,24 @@ class AgentService:
                 result = await plc_service.adjust(device_id, tag_name, delta, user_id)
                 if result["success"]:
                     logger.info("[Agent Tool] adjust_plc 成功")
+                    device_name = result.get("device_name", f"设备{device_id}")
+                    tag_name_result = result.get("tag_name", tag_name)
+                    value = result.get("value")
+                    previous_value = result.get("previous_value")
+                    unit = result.get("unit", "")
                     return json.dumps(
                         {
-                            "message": result.get("message", "调整成功"),
                             "status": "success",
+                            "reply": f"已将{device_name}的{tag_name_result}从 {previous_value}{unit} 调整到 {value}{unit}",
                             "data": {
                                 "device_id": result.get("device_id"),
-                                "device_name": result.get("device_name"),
+                                "device_name": device_name,
                                 "tag_id": result.get("tag_id"),
-                                "tag_name": result.get("tag_name"),
-                                "value": result.get("value"),
-                                "previous_value": result.get("previous_value"),
+                                "tag_name": tag_name_result,
+                                "value": value,
+                                "previous_value": previous_value,
                                 "delta": result.get("delta"),
-                                "unit": result.get("unit"),
+                                "unit": unit,
                             },
                             "duration_ms": result.get("execution_time_ms"),
                             "command_log_id": result.get("command_log_id"),
@@ -528,27 +538,15 @@ class AgentService:
                             operation="adjust",
                         )
 
-                    return f"""CONFIRMATION_REQUIRED
-
-操作需要用户确认，已记录待确认状态。
-
-即将执行操作：
-- 设备：{device_name}
-- 点位：{tag_name}
-- 当前值：{previous_value}
-- 调整量：{'+' if delta > 0 else ''}{delta}
-- 目标值：{target_value}
-
-请将以下选项展示给用户，等待用户回复：
-1. 确认执行
-2. 取消
-
-【重要】你只需要展示选项，不要自己调用 confirm_operation 或 cancel_operation。等待用户回复后，下一轮对话再根据用户选择调用相应工具。"""
+                    return json.dumps({
+                        "status": "pending",
+                        "reply": f"即将执行操作：\n- 设备：{device_name}\n- 点位：{tag_name}\n- 当前值：{previous_value}\n- 调整量：{'+' if delta > 0 else ''}{delta}\n- 目标值：{target_value}\n\n请选择：\n1. 确认执行\n2. 取消",
+                    }, ensure_ascii=False)
                 logger.warning(f"[Agent Tool] adjust_plc 失败, message={result['message']}")
                 return json.dumps(
                     {
-                        "message": f"调整失败: {result['message']}",
                         "status": "failed",
+                        "reply": f"操作失败：{result['message']}",
                     },
                     ensure_ascii=False,
                 )
@@ -564,13 +562,13 @@ class AgentService:
                 logger.info("[Agent Tool] confirm_operation 被调用")
 
                 if not self._current_session:
-                    return "错误：无法获取会话信息"
+                    return json.dumps({"status": "failed", "reply": "错误：无法获取会话信息"}, ensure_ascii=False)
 
                 context = self._current_session.operation_context or {}
                 pending = context.get("pending_confirmation")
 
                 if not pending:
-                    return "没有待确认的操作。请先发起一个需要确认的操作。"
+                    return json.dumps({"status": "failed", "reply": "没有待确认的操作"}, ensure_ascii=False)
 
                 result = await plc_service.write(
                     pending["device_id"],
@@ -584,9 +582,16 @@ class AgentService:
 
                 if result["success"]:
                     logger.info("[Agent Tool] confirm_operation 成功")
-                    return f"【操作已完成】{pending['tag_name']} 已成功设为 {pending['value']}。任务完成，无需再调用任何工具。"
+                    device_name = pending.get("device_name", f"设备{pending['device_id']}")
+                    return json.dumps({
+                        "status": "success",
+                        "reply": f"已将{device_name}的{pending['tag_name']}设为 {pending['value']}{result.get('unit', '')}",
+                    }, ensure_ascii=False)
                 logger.warning(f"[Agent Tool] confirm_operation 失败, message={result['message']}")
-                return f"操作执行失败: {result['message']}。任务结束。"
+                return json.dumps({
+                    "status": "failed",
+                    "reply": f"操作失败：{result['message']}",
+                }, ensure_ascii=False)
 
             @tool
             async def cancel_operation() -> str:
@@ -599,17 +604,18 @@ class AgentService:
                 logger.info("[Agent Tool] cancel_operation 被调用")
 
                 if not self._current_session:
-                    return "错误：无法获取会话信息"
+                    return json.dumps({"status": "failed", "reply": "错误：无法获取会话信息"}, ensure_ascii=False)
 
                 context = self._current_session.operation_context or {}
                 pending = context.get("pending_confirmation")
 
                 if not pending:
-                    return "没有待取消的操作。"
+                    return json.dumps({"status": "failed", "reply": "没有待取消的操作"}, ensure_ascii=False)
 
+                tag_name = pending.get("tag_name", "未知点位")
                 await self.clear_pending_confirmation(self._current_session)
                 logger.info("[Agent Tool] cancel_operation 成功")
-                return f"操作已取消: {pending['tag_name']} 的写入操作已取消"
+                return json.dumps({"status": "success", "reply": f"已取消 {tag_name} 的写入操作"}, ensure_ascii=False)
 
             self._tools = [
                 search_device,
@@ -627,12 +633,13 @@ class AgentService:
         """创建 Agent (LangChain 1.x 版本)"""
         tools = self.get_tools(user_id)
 
-        # 使用 ChatOpenAI 实例
+        # 使用 ChatOpenAI 实例，添加请求超时
         llm = ChatOpenAI(
             base_url=settings.MODBUS_LLM_BASE_URL,
             api_key=settings.MODBUS_LLM_API_KEY,
             model=self._config.get("modbus_llm_model_name"),
             temperature=self._config.get("modbus_llm_temperature"),
+            request_timeout=self._config.get("modbus_llm_request_timeout", 60),
         )
 
         # 使用 LangChain 1.x 的 create_agent API
@@ -888,6 +895,11 @@ class AgentService:
         if context_hint:
             logger.info(f"[Agent Stream] 上下文提示: {context_hint[:100]}...")
         if should_clear_disambiguation:
+            # 消歧完成，发送事件更新上一条消息的步骤状态
+            yield {
+                "type": "disambiguation_resolved",
+                "session_id": session.session_id,
+            }
             await self.clear_disambiguation_context(session)
         if should_clear_pending:
             await self.clear_pending_confirmation(session)
@@ -924,8 +936,12 @@ class AgentService:
             # 记录工具调用参数: tool_call_id -> {"name": str, "args": dict, "started_at": str}
             pending_tool_calls: dict[str, dict] = {}
 
+            # 获取超时配置
+            stream_timeout = self._config.get("modbus_llm_stream_timeout", 120)
+            start_time = datetime.now()
+
             logger.info(
-                f"[Agent Stream] 开始执行, user_id={user_id}, message={message}"
+                f"[Agent Stream] 开始执行, user_id={user_id}, message={message}, timeout={stream_timeout}s"
             )
 
             # LangChain 1.x 使用 stream 方法，stream_mode=["messages", "updates"]
@@ -933,6 +949,17 @@ class AgentService:
                 {"messages": messages},
                 stream_mode=["messages", "updates"],
             ):
+                # 检查是否超时
+                elapsed = (datetime.now() - start_time).total_seconds()
+                if elapsed > stream_timeout:
+                    logger.warning(f"[Agent Stream] 执行超时 ({elapsed:.1f}s > {stream_timeout}s)")
+                    yield {
+                        "type": "error",
+                        "session_id": session.session_id,
+                        "error": f"响应超时，请稍后重试",
+                    }
+                    return
+
                 # 检查是否需要中断（消歧或确认请求）
                 if should_stop:
                     logger.info("[Agent Stream] 检测到需要用户交互，中断执行")
@@ -1038,10 +1065,15 @@ class AgentService:
                                     try:
                                         parsed = json.loads(tool_output)
                                         parsed_data = parsed.get("data")
-                                        parsed_message = parsed.get("message", parsed_message)
+                                        parsed_message = parsed.get("reply") or parsed.get("message", parsed_message)
                                         command_log_id = parsed.get("command_log_id")
-                                        if parsed.get("status") == "failed":
+                                        tool_status = parsed.get("status")
+                                        if tool_status == "failed":
                                             action_status = "failed"
+                                        elif tool_status == "pending":
+                                            action_status = "pending"
+                                            full_reply = parsed.get("reply", "")
+                                            should_stop = True
                                     except (json.JSONDecodeError, TypeError):
                                         pass
 
@@ -1073,17 +1105,34 @@ class AgentService:
                             # 处理 AI 回复完成
                             ai_msg = update["messages"][-1]
                             if isinstance(ai_msg, AIMessage) and ai_msg.tool_calls:
-                                # 记录工具调用参数供后续 ToolMessage 使用
+                                # 记录工具调用参数供后续 ToolMessage 使用，并发送 action_start 事件
                                 for tc in ai_msg.tool_calls:
                                     tool_call_id = tc.get("id", "")
+                                    tool_name = tc.get("name", "unknown")
+                                    tool_args = tc.get("args", {})
+                                    started_at = datetime.now().isoformat()
+
                                     logger.info(f"[Agent Tool] 工具调用: {tc}")
 
-                                    # 记录到 pending_tool_calls（如果尚未记录）
+                                    # 记录到 pending_tool_calls（如果尚未记录）并发送 action_start 事件
                                     if tool_call_id and tool_call_id not in pending_tool_calls:
                                         pending_tool_calls[tool_call_id] = {
-                                            "name": tc.get("name", "unknown"),
-                                            "args": tc.get("args", {}),
-                                            "started_at": datetime.now().isoformat(),
+                                            "name": tool_name,
+                                            "args": tool_args,
+                                            "started_at": started_at,
+                                        }
+
+                                        # 发送 action_start 事件给前端
+                                        logger.info(f"[Agent Tool] 调用开始: {tool_name}, args={tool_args}")
+                                        yield {
+                                            "type": "action_start",
+                                            "session_id": session.session_id,
+                                            "action": {
+                                                "tool": tool_name,
+                                                "args": tool_args,
+                                                "status": "running",
+                                                "started_at": started_at,
+                                            },
                                         }
 
             await self._update_session(session, message, full_reply)

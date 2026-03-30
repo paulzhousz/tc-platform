@@ -25,6 +25,18 @@ INSERT INTO sys_param (config_name, config_key, config_value, config_type, statu
 SELECT 'LLM 最大历史轮数', 'modbus_llm_max_history_turns', '20', true, '0', gen_random_uuid()::text, '会话历史最大保留轮数', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM sys_param WHERE config_key = 'modbus_llm_max_history_turns');
 
+INSERT INTO sys_param (config_name, config_key, config_value, config_type, status, uuid, description, created_time, updated_time)
+SELECT 'LLM 请求超时', 'modbus_llm_request_timeout', '60', true, '0', gen_random_uuid()::text, 'LLM API 请求超时时间（秒）', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM sys_param WHERE config_key = 'modbus_llm_request_timeout');
+
+INSERT INTO sys_param (config_name, config_key, config_value, config_type, status, uuid, description, created_time, updated_time)
+SELECT 'LLM 流式响应超时', 'modbus_llm_stream_timeout', '120', true, '0', gen_random_uuid()::text, 'LLM 流式响应整体超时时间（秒）', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM sys_param WHERE config_key = 'modbus_llm_stream_timeout');
+
+INSERT INTO sys_param (config_name, config_key, config_value, config_type, status, uuid, description, created_time, updated_time)
+SELECT '工具执行超时', 'modbus_tool_execution_timeout', '30', true, '0', gen_random_uuid()::text, 'PLC 工具执行超时时间（秒）', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM sys_param WHERE config_key = 'modbus_tool_execution_timeout');
+
 -- ============================================================
 -- 重试配置
 -- ============================================================

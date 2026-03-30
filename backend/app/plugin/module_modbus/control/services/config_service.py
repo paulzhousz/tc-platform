@@ -36,6 +36,9 @@ class ModbusConfigService:
         "modbus_llm_temperature": 0.0,
         "modbus_llm_session_ttl_minutes": 10,
         "modbus_llm_max_history_turns": 20,
+        "modbus_llm_request_timeout": 60,  # LLM API 请求超时（秒）
+        "modbus_llm_stream_timeout": 120,  # 流式响应整体超时（秒）
+        "modbus_tool_execution_timeout": 30,  # 工具执行超时（秒）
         # 重试配置
         "modbus_retry_enabled": True,
         "modbus_retry_times": 3,
@@ -57,6 +60,8 @@ class ModbusConfigService:
     FLOAT_KEYS = ("modbus_llm_temperature", "modbus_retry_interval", "modbus_silence_threshold")
     INT_KEYS = (
         "modbus_llm_session_ttl_minutes", "modbus_llm_max_history_turns",
+        "modbus_llm_request_timeout", "modbus_llm_stream_timeout",
+        "modbus_tool_execution_timeout",
         "modbus_retry_times", "modbus_poll_interval",
         "modbus_pending_expire_minutes", "modbus_silence_duration",
         "modbus_chat_save_min_messages",

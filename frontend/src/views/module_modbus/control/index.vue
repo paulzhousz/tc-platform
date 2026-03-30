@@ -222,6 +222,7 @@
                           <div class="step-header" @click="toggleStep(index, si)">
                             <span class="step-icon">{{ getStepIcon(step.tool) }}</span>
                             <span class="step-name">{{ getToolDisplayName(step.tool) }}</span>
+                            <span class="step-method-name">{{ step.tool }}</span>
                             <span
                               class="step-status"
                               :style="{ color: getActionStatusColor(step.status) }"
@@ -1675,6 +1676,15 @@ onMounted(async () => {
         .step-name {
           font-weight: 500;
           color: #333;
+        }
+
+        .step-method-name {
+          font-size: 11px;
+          color: #8c8c8c;
+          background: #f5f5f5;
+          padding: 2px 6px;
+          border-radius: 4px;
+          margin-left: 6px;
         }
 
         .step-status {

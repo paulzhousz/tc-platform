@@ -14,6 +14,7 @@ DateTimeStr = Annotated[
     PlainSerializer(
         lambda x: x.strftime("%Y-%m-%d %H:%M:%S") if isinstance(x, datetime) else str(x),
         return_type=str,
+        when_used="json",
     ),
     WithJsonSchema({"type": "string"}, mode="serialization"),
 ]
@@ -25,6 +26,7 @@ DateStr = Annotated[
     PlainSerializer(
         lambda x: x.strftime("%Y-%m-%d") if isinstance(x, date) else str(x),
         return_type=str,
+        when_used="json",
     ),
     WithJsonSchema({"type": "string"}, mode="serialization"),
 ]
@@ -36,6 +38,7 @@ TimeStr = Annotated[
     PlainSerializer(
         lambda x: x.strftime("%H:%M:%S") if isinstance(x, time) else str(x),
         return_type=str,
+        when_used="json",
     ),
     WithJsonSchema({"type": "string"}, mode="serialization"),
 ]
@@ -225,6 +228,9 @@ def menu_request_validator(data: Any) -> Any:
             raise CustomException(code=RET.ERROR.code, msg="路由名称不能为空")
         if not data.route_path:
             raise CustomException(code=RET.ERROR.code, msg="路由路径不能为空")
+
+    if data.type == 1 and not (data.redirect and str(data.redirect).strip()):
+        raise CustomException(code=RET.ERROR.code, msg="目录类型必须填写重定向地址")
 
     if data.type == 2 and not data.component_path:
         raise CustomException(code=RET.ERROR.code, msg="组件路径不能为空")

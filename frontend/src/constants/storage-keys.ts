@@ -26,6 +26,7 @@ export const SHOW_LANG_SELECT_KEY = "showLangSelect";
 export const SHOW_NOTIFICATION_KEY = "showNotification";
 export const SHOW_GUIDE_KEY = "showGuide"; // 引导功能开关
 export const LAYOUT_KEY = "layout";
+export const SIDEBAR_COLOR_SCHEME_KEY = "sidebarColorScheme";
 export const THEME_KEY = "theme";
 export const THEME_COLOR_KEY = "themeColor";
 export const GRAY_MODE_KEY = "grayMode";
@@ -60,6 +61,7 @@ export const SETTINGS_KEYS = {
   SHOW_LANG_SELECT: SHOW_LANG_SELECT_KEY,
   SHOW_NOTIFICATION: SHOW_NOTIFICATION_KEY,
   SHOW_GUIDE: SHOW_GUIDE_KEY,
+  SIDEBAR_COLOR_SCHEME: SIDEBAR_COLOR_SCHEME_KEY,
   LAYOUT: LAYOUT_KEY,
   THEME_COLOR: THEME_COLOR_KEY,
   THEME: THEME_KEY,

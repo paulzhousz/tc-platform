@@ -41,6 +41,7 @@ async def get_online_list_controller(
     - JSONResponse: 包含在线用户列表的JSON响应。
     """
     result_dict_list = await OnlineService.get_online_list_service(redis=redis, search=search)
+    # 在线用户来自 Redis，无法在数据库层 OFFSET/LIMIT
     result_dict = await PaginationService.paginate(
         data_list=result_dict_list,
         page_no=paging_query.page_no,

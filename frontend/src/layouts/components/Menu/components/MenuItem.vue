@@ -13,13 +13,14 @@
     >
       <AppLink
         v-if="onlyOneChild.meta"
-        :to="{
-          path: resolvePath(onlyOneChild.path),
-          query: onlyOneChild.meta.params,
-        }"
+        :to="
+          onlyOneChild.name
+            ? { name: onlyOneChild.name, query: onlyOneChild.meta.params }
+            : { path: resolvePath(onlyOneChild.path || ''), query: onlyOneChild.meta.params }
+        "
       >
         <el-menu-item
-          :index="resolvePath(onlyOneChild.path)"
+          :index="menuItemIndex(onlyOneChild, resolvePath(onlyOneChild.path || ''))"
           :class="{ 'submenu-title-noDropdown': !isNest }"
         >
           <MenuItemContent
@@ -32,17 +33,23 @@
     </template>
 
     <!--【非叶子节点】显示含多个子节点的父菜单，或始终显示的单子节点 -->
-    <el-sub-menu v-else :index="resolvePath(item.path)" :data-path="item.path" teleported>
+    <el-sub-menu
+      v-else
+      :index="menuItemIndex(item, resolvePath(item.path || ''))"
+      :data-path="resolvePath(item.path || '')"
+    >
       <template #title>
-        <MenuItemContent v-if="item.meta" :icon="item.meta.icon" :title="item.meta.title" />
+        <span class="menu-title-wrapper" :data-path="resolvePath(item.path || '')">
+          <MenuItemContent v-if="item.meta" :icon="item.meta.icon" :title="item.meta.title" />
+        </span>
       </template>
 
       <MenuItem
         v-for="child in item.children"
-        :key="child.path"
+        :key="String(child.name ?? child.path)"
         :is-nest="true"
         :item="child"
-        :base-path="resolvePath(child.path)"
+        :base-path="resolvePath(item.path || '')"
       />
     </el-sub-menu>
   </div>
@@ -58,8 +65,11 @@ defineOptions({
 
 import path from "path-browserify";
 import { RouteRecordRaw } from "vue-router";
+import { useRouter } from "vue-router";
 
 import { isExternal } from "@/utils";
+
+const router = useRouter();
 
 const props = defineProps({
   /**
@@ -131,13 +141,49 @@ function resolvePath(routePath: string) {
   if (isExternal(routePath)) return routePath;
   if (isExternal(props.basePath)) return props.basePath;
 
-  // 拼接父路径和当前路径
-  return path.resolve(props.basePath, routePath);
+  const base = props.basePath && props.basePath !== "" ? props.basePath : "/";
+  return path.resolve(base, routePath);
+}
+
+/** 与 BasicMenu.default-active（route.path）对齐 */
+function normalizeMenuPath(p: string): string {
+  if (!p) return "";
+  if (/^https?:\/\//i.test(p) || p.startsWith("//")) return p;
+  const s = p.trim();
+  if (s === "/") return "/";
+  return s.replace(/\/+$/, "") || "/";
+}
+
+function hasVisibleChildren(node: RouteRecordRaw): boolean {
+  return !!node.children?.some((c) => !c.meta?.hidden);
+}
+
+/**
+ * el-menu 的 index 必须与 default-active 字符串完全一致。
+ * - 目录（有可见子节点）：只用菜单树 path.resolve 结果，禁止 router.resolve(name)（常变成父级 /task，导致兄弟目录误亮）。
+ * - 叶子：用 router.resolve(name).path，与当前页 route.path 同源，避免纯拼路径与路由表不一致。
+ */
+function menuItemIndex(item: RouteRecordRaw, resolvedFromTree: string): string {
+  const treePath = normalizeMenuPath(resolvedFromTree);
+
+  if (hasVisibleChildren(item)) {
+    if (treePath) return treePath;
+    if (item.name != null && item.name !== "") return String(item.name);
+    return "";
+  }
+
+  if (item.name) {
+    try {
+      return normalizeMenuPath(router.resolve({ name: item.name as string }).path);
+    } catch {
+      /* fallthrough */
+    }
+  }
+  return treePath;
 }
 </script>
 
 <style lang="scss">
-/* stylelint-disable no-descending-specificity */
 .hideSidebar {
   .submenu-title-noDropdown {
     position: relative;
@@ -180,64 +226,42 @@ function resolvePath(routePath: string) {
   }
 }
 
-html.dark {
-  .el-menu-item:hover {
-    background-color: var(--menu-hover);
-  }
-}
-
-// 激活菜单项样式 - 只有文字变色，无背景色
-.el-menu-item.is-active {
-  font-weight: 500;
-  color: var(--sidebar-active-text-color, var(--el-color-primary-dark-2)) !important;
-
-  .menu-icon {
-    color: var(--sidebar-active-text-color, var(--el-color-primary-dark-2)) !important;
-  }
-}
-
 // 父菜单激活状态样式 - 当子菜单激活时，父菜单显示激活状态
 .el-sub-menu {
-  // 当父菜单包含激活子菜单时的样式
-  &.has-active-child .el-sub-menu__title {
-    color: var(--sidebar-active-text-color, var(--el-color-primary-dark-2)) !important;
-    background-color: var(--sidebar-active-bg) !important;
+  .menu-title-wrapper {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    line-height: 1;
+  }
+
+  // 子项激活时 Element Plus 会给父级 el-sub-menu 加 .is-active
+  &.is-active > .el-sub-menu__title {
+    color: var(--el-color-primary) !important;
 
     .menu-icon {
-      color: var(--sidebar-active-text-color, var(--el-color-primary-dark-2)) !important;
+      color: var(--el-color-primary) !important;
     }
   }
 
-  &.has-active-child .el-sub-menu__title:hover {
-    background-color: var(--sidebar-active-hover-bg) !important;
-  }
+  html.dark & {
+    &.is-active > .el-sub-menu__title {
+      color: var(--el-color-primary-light-3) !important;
 
-  // 深蓝色侧边栏配色下的父菜单激活状态
-  html.sidebar-color-blue &.has-active-child .el-sub-menu__title {
-    color: var(--sidebar-active-text-color, var(--el-color-primary-light-3)) !important;
-    background-color: var(--sidebar-active-bg) !important;
-
-    .menu-icon {
-      color: var(--sidebar-active-text-color, var(--el-color-primary-light-3)) !important;
+      .menu-icon {
+        color: var(--el-color-primary-light-3) !important;
+      }
     }
   }
 
-  html.sidebar-color-blue &.has-active-child .el-sub-menu__title:hover {
-    background-color: var(--sidebar-active-hover-bg) !important;
-  }
+  html.sidebar-color-blue & {
+    &.is-active > .el-sub-menu__title {
+      color: var(--el-color-primary-light-3) !important;
 
-  // 深色主题下的父菜单激活状态
-  html.dark &.has-active-child .el-sub-menu__title {
-    color: var(--sidebar-active-text-color, var(--el-color-primary-light-3)) !important;
-    background-color: var(--sidebar-active-bg) !important;
-
-    .menu-icon {
-      color: var(--sidebar-active-text-color, var(--el-color-primary-light-3)) !important;
+      .menu-icon {
+        color: var(--el-color-primary-light-3) !important;
+      }
     }
-  }
-
-  html.dark &.has-active-child .el-sub-menu__title:hover {
-    background-color: var(--sidebar-active-hover-bg) !important;
   }
 }
 </style>

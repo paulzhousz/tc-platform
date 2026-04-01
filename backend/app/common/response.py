@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from typing import Any, Generic
 
 from fastapi import status
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from pydantic.types import T
@@ -50,8 +51,8 @@ class SuccessResponse(JSONResponse):
             data=data,
             status_code=status_code,
             success=success,
-        ).model_dump(mode="json")
-        super().__init__(content=content, status_code=status_code)
+        ).model_dump()
+        super().__init__(content=jsonable_encoder(content), status_code=status_code)
 
 
 class ErrorResponse(JSONResponse):
@@ -84,8 +85,8 @@ class ErrorResponse(JSONResponse):
             data=data,
             status_code=status_code,
             success=success,
-        ).model_dump(mode="json")
-        super().__init__(content=content, status_code=status_code)
+        ).model_dump()
+        super().__init__(content=jsonable_encoder(content), status_code=status_code)
 
 
 class StreamResponse(StreamingResponse):

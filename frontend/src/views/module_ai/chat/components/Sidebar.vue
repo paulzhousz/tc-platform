@@ -282,8 +282,9 @@ const handleUserCommand = (command: string) => {
   } else if (command === "settings") {
     ElMessage.info("设置功能开发中");
   } else if (command === "logout") {
-    userStore.logout();
-    router.push("/login");
+    userStore.logout().then(() => {
+      router.push("/login");
+    });
   }
 };
 
@@ -388,7 +389,7 @@ defineExpose({
         }
 
         &:hover {
-          box-shadow: 0 4px 12px rgba(24, 144, 255, 0.3);
+          box-shadow: var(--el-box-shadow);
           transform: translateY(-1px);
         }
 
@@ -487,8 +488,8 @@ defineExpose({
               &.active {
                 color: var(--el-color-primary);
                 background: var(--el-color-primary-light-9);
-                border-color: var(--el-color-primary-light-7);
-                box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+                border-color: var(--el-border-color-light);
+                box-shadow: none;
               }
 
               .session-icon {

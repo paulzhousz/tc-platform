@@ -47,7 +47,7 @@ const displayText = computed(() => {
   padding: 8px;
   overflow: auto;
   background-color: var(--el-fill-color-blank);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
 }
 

@@ -227,6 +227,27 @@ class GenTableCRUD(CRUDBase[GenTableModel, GenTableSchema, GenTableSchema]):
         inspector: Inspector = inspect(engine)
         return inspector.has_table(table_name)
 
+    async def get_db_table_comment(self, table_name: str) -> str:
+        """
+        获取数据库中指定表的注释（用于主子表场景下从库中加载子表元信息）。
+        """
+        from app.core.database import engine
+
+        inspector: Inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            return ""
+        try:
+            table_comment = inspector.get_table_comment(table_name)
+            comment = (
+                table_comment.get("text", "")
+                if isinstance(table_comment, dict)
+                else (table_comment or "")
+            )
+            return comment or ""
+        except Exception as e:
+            log.warning(f"获取表 {table_name} 的注释失败: {e}")
+            return ""
+
     async def execute_sql(self, sql: str) -> bool:
         """
         执行SQL语句。

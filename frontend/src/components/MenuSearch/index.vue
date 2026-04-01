@@ -550,22 +550,7 @@ function loadRoutes(routes: RouteRecordRaw[], parentPath = "") {
   background-color: var(--el-fill-color-blank);
   border: 1px solid var(--el-border-color);
   border-radius: 3px;
-  box-shadow:
-    inset 0 -2px 0 0 var(--el-border-color),
-    inset 0 0 1px 1px var(--el-color-white),
-    0 1px 2px rgba(30, 35, 90, 0.2);
-
-  &::before {
-    position: absolute;
-    top: 1px;
-    right: 1px;
-    left: 1px;
-    height: 50%;
-    pointer-events: none;
-    content: "";
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
-    border-radius: 2px 2px 0 0;
-  }
+  box-shadow: var(--el-box-shadow-light);
 }
 
 .esc-btn {
@@ -593,12 +578,5 @@ function loadRoutes(routes: RouteRecordRaw[], parentPath = "") {
   box-sizing: border-box;
   padding-top: 10px;
   text-align: right;
-}
-
-// 暗黑模式适配
-html.dark {
-  .key-btn::before {
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
-  }
 }
 </style>

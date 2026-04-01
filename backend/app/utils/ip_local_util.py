@@ -2,6 +2,7 @@ import re
 
 import httpx
 
+from app.config.setting import settings
 from app.core.logger import log
 
 
@@ -39,6 +40,24 @@ class IpLocalUtil:
         """
         priv_pattern = r"^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)"
         return bool(re.match(priv_pattern, ip))
+
+    @classmethod
+    async def resolve_location_for_log(cls, ip: str | None) -> str | None:
+        """
+        登录与操作日志写入 ``login_location`` 时统一入口。
+
+        与 ``settings.LOGIN_RESOLVE_IP_LOCATION`` 一致：为 ``False`` 时不请求外网，
+        避免登录 POST 在 ``OperationLogRoute`` 收尾阶段仍触发 IP 归属地查询导致变慢。
+        """
+        if not ip:
+            return None
+        if not settings.LOGIN_RESOLVE_IP_LOCATION:
+            return (
+                "内网IP"
+                if cls.is_private_ip(ip)
+                else "未解析(已关闭归属地查询)"
+            )
+        return await cls.get_ip_location(ip)
 
     @classmethod
     async def get_ip_location(cls, ip: str) -> str | None:

@@ -95,7 +95,7 @@ const { routes } = useLayoutMenu();
       position: sticky;
       top: 0;
       z-index: 9;
-      background-color: var(--bg-secondary);
+      background-color: var(--layout-header-bg, var(--el-bg-color-overlay));
       transition: width 0.28s;
     }
   }

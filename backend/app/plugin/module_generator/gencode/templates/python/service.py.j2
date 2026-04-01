@@ -25,7 +25,7 @@ class {{ class_name }}Service:
     """
     
     @classmethod
-    async def detail_{{ business_name }}_service(cls, auth: AuthSchema, id: int) -> dict:
+    async def detail_{{ business_name_slug }}_service(cls, auth: AuthSchema, id: int) -> dict:
         """
         详情
         
@@ -36,13 +36,13 @@ class {{ class_name }}Service:
         返回:
         - dict - 数据详情
         """
-        obj = await {{ class_name }}CRUD(auth).get_by_id_{{ business_name }}_crud(id=id)
+        obj = await {{ class_name }}CRUD(auth).get_by_id_{{ business_name_slug }}_crud(id=id)
         if not obj:
             raise CustomException(msg="该数据不存在")
         return {{ class_name }}OutSchema.model_validate(obj).model_dump()
     
     @classmethod
-    async def list_{{ business_name }}_service(cls, auth: AuthSchema, search: {{ class_name }}QueryParam | None = None, order_by: list[dict] | None = None) -> list[dict]:
+    async def list_{{ business_name_slug }}_service(cls, auth: AuthSchema, search: {{ class_name }}QueryParam | None = None, order_by: list[dict] | None = None) -> list[dict]:
         """
         列表查询
         
@@ -55,11 +55,11 @@ class {{ class_name }}Service:
         - list[dict] - 数据列表
         """
         search_dict = search.__dict__ if search else None
-        obj_list = await {{ class_name }}CRUD(auth).list_{{ business_name }}_crud(search=search_dict, order_by=order_by)
+        obj_list = await {{ class_name }}CRUD(auth).list_{{ business_name_slug }}_crud(search=search_dict, order_by=order_by)
         return [{{ class_name }}OutSchema.model_validate(obj).model_dump() for obj in obj_list]
 
     @classmethod
-    async def page_{{ business_name }}_service(cls, auth: AuthSchema, page_no: int, page_size: int, search: {{ class_name }}QueryParam | None = None, order_by: list[dict] | None = None) -> dict:
+    async def page_{{ business_name_slug }}_service(cls, auth: AuthSchema, page_no: int, page_size: int, search: {{ class_name }}QueryParam | None = None, order_by: list[dict] | None = None) -> dict:
         """
         分页查询（数据库分页）
         
@@ -74,9 +74,9 @@ class {{ class_name }}Service:
         - dict - 分页查询结果
         """
         search_dict = search.__dict__ if search else {}
-        order_by_list = order_by or [{'id': 'asc'}]
+        order_by_list = order_by or [{'{{ pk_column_name }}': 'asc'}]
         offset = (page_no - 1) * page_size
-        result = await {{ class_name }}CRUD(auth).page_{{ business_name }}_crud(
+        result = await {{ class_name }}CRUD(auth).page_{{ business_name_slug }}_crud(
             offset=offset,
             limit=page_size,
             order_by=order_by_list,
@@ -85,7 +85,7 @@ class {{ class_name }}Service:
         return result
     
     @classmethod
-    async def create_{{ business_name }}_service(cls, auth: AuthSchema, data: {{ class_name }}CreateSchema) -> dict:
+    async def create_{{ business_name_slug }}_service(cls, auth: AuthSchema, data: {{ class_name }}CreateSchema) -> dict:
         """
         创建
         
@@ -103,11 +103,11 @@ class {{ class_name }}Service:
             raise CustomException(msg='创建失败，{{ column.column_comment }}已存在')
         {% endif %}
         {% endfor %}
-        obj = await {{ class_name }}CRUD(auth).create_{{ business_name }}_crud(data=data)
+        obj = await {{ class_name }}CRUD(auth).create_{{ business_name_slug }}_crud(data=data)
         return {{ class_name }}OutSchema.model_validate(obj).model_dump()
     
     @classmethod
-    async def update_{{ business_name }}_service(cls, auth: AuthSchema, id: int, data: {{ class_name }}UpdateSchema) -> dict:
+    async def update_{{ business_name_slug }}_service(cls, auth: AuthSchema, id: int, data: {{ class_name }}UpdateSchema) -> dict:
         """
         更新
         
@@ -120,7 +120,7 @@ class {{ class_name }}Service:
         - dict - 更新结果
         """
         # 检查数据是否存在
-        obj = await {{ class_name }}CRUD(auth).get_by_id_{{ business_name }}_crud(id=id)
+        obj = await {{ class_name }}CRUD(auth).get_by_id_{{ business_name_slug }}_crud(id=id)
         if not obj:
             raise CustomException(msg='更新失败，该数据不存在')
         
@@ -128,16 +128,16 @@ class {{ class_name }}Service:
         {% for column in columns %}
         {% if column.is_unique == '1' %}
         exist_obj = await {{ class_name }}CRUD(auth).get({{ column.column_name }}=data.{{ column.column_name }})
-        if exist_obj and exist_obj.id != id:
+        if exist_obj and getattr(exist_obj, '{{ pk_column_name }}') != id:
             raise CustomException(msg='更新失败，{{ column.column_comment }}重复')
         {% endif %}
         {% endfor %}
             
-        obj = await {{ class_name }}CRUD(auth).update_{{ business_name }}_crud(id=id, data=data)
+        obj = await {{ class_name }}CRUD(auth).update_{{ business_name_slug }}_crud(id=id, data=data)
         return {{ class_name }}OutSchema.model_validate(obj).model_dump()
     
     @classmethod
-    async def delete_{{ business_name }}_service(cls, auth: AuthSchema, ids: list[int]) -> None:
+    async def delete_{{ business_name_slug }}_service(cls, auth: AuthSchema, ids: list[int]) -> None:
         """
         删除
         
@@ -151,13 +151,13 @@ class {{ class_name }}Service:
         if len(ids) < 1:
             raise CustomException(msg='删除失败，删除对象不能为空')
         for id in ids:
-            obj = await {{ class_name }}CRUD(auth).get_by_id_{{ business_name }}_crud(id=id)
+            obj = await {{ class_name }}CRUD(auth).get_by_id_{{ business_name_slug }}_crud(id=id)
             if not obj:
                 raise CustomException(msg=f'删除失败，ID为{id}的数据不存在')
-        await {{ class_name }}CRUD(auth).delete_{{ business_name }}_crud(ids=ids)
+        await {{ class_name }}CRUD(auth).delete_{{ business_name_slug }}_crud(ids=ids)
     
     @classmethod
-    async def set_available_{{ business_name }}_service(cls, auth: AuthSchema, data: BatchSetAvailable) -> None:
+    async def set_available_{{ business_name_slug }}_service(cls, auth: AuthSchema, data: BatchSetAvailable) -> None:
         """
         批量设置状态
         
@@ -168,10 +168,10 @@ class {{ class_name }}Service:
         返回:
         - None
         """
-        await {{ class_name }}CRUD(auth).set_available_{{ business_name }}_crud(ids=data.ids, status=data.status)
+        await {{ class_name }}CRUD(auth).set_available_{{ business_name_slug }}_crud(ids=data.ids, status=data.status)
     
     @classmethod
-    async def batch_export_{{ business_name }}_service(cls, obj_list: list[dict]) -> bytes:
+    async def batch_export_{{ business_name_slug }}_service(cls, obj_list: list[dict]) -> bytes:
         """
         批量导出
         
@@ -201,7 +201,7 @@ class {{ class_name }}Service:
         return ExcelUtil.export_list2excel(list_data=data, mapping_dict=mapping_dict)
 
     @classmethod
-    async def batch_import_{{ business_name }}_service(cls, auth: AuthSchema, file: UploadFile, update_support: bool = False) -> str:
+    async def batch_import_{{ business_name_slug }}_service(cls, auth: AuthSchema, file: UploadFile, update_support: bool = False) -> str:
         """
         批量导入
         
@@ -271,7 +271,7 @@ class {{ class_name }}Service:
                     exists_obj = await {{ class_name }}CRUD(auth).get({{ column.column_name }}=create_schema.{{ column.column_name }})
                     if exists_obj:
                         if update_support:
-                            await {{ class_name }}CRUD(auth).update(id=exists_obj.id, data=create_schema)
+                            await {{ class_name }}CRUD(auth).update(id=getattr(exists_obj, '{{ pk_column_name }}'), data=create_schema)
                             success_count += 1
                         else:
                             error_msgs.append(f"第{count}行: {{ column.column_comment }} {create_schema.{{ column.column_name }}} 已存在")
@@ -279,7 +279,7 @@ class {{ class_name }}Service:
                     {% endif %}
                     {% endfor %}
                     
-                    await {{ class_name }}CRUD(auth).create_{{ business_name }}_crud(data=create_schema)
+                    await {{ class_name }}CRUD(auth).create_{{ business_name_slug }}_crud(data=create_schema)
                     success_count += 1
                 except Exception as e:
                     error_msgs.append(f"第{count}行: {str(e)}")
@@ -295,7 +295,7 @@ class {{ class_name }}Service:
             raise CustomException(msg=f"导入失败: {str(e)}")
     
     @classmethod
-    async def import_template_download_{{ business_name }}_service(cls) -> bytes:
+    async def import_template_download_{{ business_name_slug }}_service(cls) -> bytes:
         """
         下载导入模板
         

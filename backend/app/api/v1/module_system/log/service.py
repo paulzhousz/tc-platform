@@ -57,6 +57,25 @@ class OperationLogService:
         return log_dict_list
 
     @classmethod
+    async def get_log_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: OperationLogQueryParam | None = None,
+        order_by: list | None = None,
+    ) -> dict:
+        """分页查询操作日志（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await OperationLogCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=OperationLogOutSchema,
+        )
+
+    @classmethod
     async def create_log_service(cls, auth: AuthSchema, data: OperationLogCreateSchema) -> dict:
         """
         创建日志

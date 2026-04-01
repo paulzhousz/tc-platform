@@ -112,8 +112,11 @@ class Settings(BaseSettings):
     # ================================================= #
     CAPTCHA_ENABLE: bool = True  # 是否启用验证码
     CAPTCHA_EXPIRE_SECONDS: int = 60 * 1  # 验证码过期时间(秒) 1分钟
-    CAPTCHA_FONT_SIZE: int = 40  # 字体大小
+    CAPTCHA_FONT_SIZE: int = 35  # 字体大小
     CAPTCHA_FONT_PATH: str = "static/assets/font/Arial.ttf"  # 字体路径
+
+    # 是否请求外网解析 IP 归属地（登录发 token、操作日志写 login_location 共用；关闭可明显加快登录）
+    LOGIN_RESOLVE_IP_LOCATION: bool = False
 
     # ================================================= #
     # ********************* 日志配置 ******************* #

@@ -3,12 +3,12 @@
     <el-card v-bind="cardAttrs">
       <!-- 搜索表单区域 -->
       <el-form
+        :key="'page-search-expand-' + isExpand"
         ref="queryFormRef"
         label-suffix=":"
         v-bind="formAttrs"
         :model="queryParams"
         :class="isGrid"
-        :inline="true"
         @submit.prevent="handleQuery"
       >
         <template v-for="(item, index) in formItems" :key="item.prop">
@@ -30,14 +30,14 @@
 
             <ElCascader
               v-if="item.type === 'cascader'"
-              v-model.trim="queryParams[item.prop]"
+              v-model="queryParams[item.prop]"
               v-bind="{ style: { width: '100%' }, ...item.attrs }"
               v-on="item.events || {}"
             />
             <component
               :is="getCustomComponent(item.type) || componentMap.get(item.type)"
               v-else
-              v-model.trim="queryParams[item.prop]"
+              v-model="queryParams[item.prop]"
               v-bind="{ style: { width: '100%' }, ...item.attrs }"
               v-on="item.events || {}"
             >
@@ -125,7 +125,7 @@ import type { IObject, IForm, ISearchConfig, ISearchComponent } from "./types";
 import { ArrowUp, ArrowDown, QuestionFilled } from "@element-plus/icons-vue";
 import type { FormInstance } from "element-plus";
 import InputTag from "@/components/InputTag/index.vue";
-import { getCurrentInstance } from "vue";
+import { getCurrentInstance, nextTick, watch } from "vue";
 import {
   ElInput,
   ElSelect,
@@ -199,18 +199,32 @@ const showNumber = computed(() =>
 );
 // 卡片组件自定义属性（阴影、自定义边距样式等）
 const cardAttrs = computed<IObject>(() => {
-  return { shadow: "never", style: { "margin-bottom": "12px" }, ...props.searchConfig?.cardAttrs };
+  return {
+    class: "search-container",
+    shadow: "never",
+    style: { marginBottom: "0" },
+    ...props.searchConfig?.cardAttrs,
+  };
 });
 // 表单组件自定义属性（label位置、宽度、对齐方式等）
 const formAttrs = computed<IForm>(() => {
-  return { inline: true, ...props.searchConfig?.form };
+  const custom = props.searchConfig?.form ?? {};
+  if (props.searchConfig?.grid) {
+    return { ...custom, inline: false };
+  }
+  return { inline: true, ...custom };
 });
-// 是否使用自适应网格布局
+/** 默认 flex（scoped）；grid 时见 .curd-page-search--grid */
 const isGrid = computed(() =>
-  props.searchConfig?.grid
-    ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6 gap-5"
-    : "flex flex-wrap gap-x-8 gap-y-4"
+  props.searchConfig?.grid ? "curd-page-search--grid" : "curd-page-search--flex"
 );
+
+/** 展开/收起后：表单已随 :key 重建，再触发 resize 让日期范围等组件量宽 */
+watch(isExpand, () => {
+  nextTick(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
+});
 
 // 获取tooltip提示框属性
 const getTooltipProps = (tips: string | IObject) => {
@@ -222,8 +236,26 @@ const toggleVisible = () => {
   visible.value = !visible.value;
 };
 
+/** 查询前对 input 做 trim；去掉空条件，避免 GET 出现 name=&created_id= 等导致后端 Optional[int] 解析失败 */
+function buildQueryPayload() {
+  const q = { ...queryParams };
+  for (const item of formItems) {
+    if (item.type === "input" && typeof q[item.prop] === "string") {
+      q[item.prop] = q[item.prop].trim();
+    }
+  }
+  const out: IObject = {};
+  for (const key of Object.keys(q)) {
+    const v = q[key];
+    if (v === "" || v === null || v === undefined) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    out[key] = v;
+  }
+  return out;
+}
+
 // 查询/重置操作
-const handleQuery = () => emit("queryClick", queryParams);
+const handleQuery = () => emit("queryClick", buildQueryPayload());
 const handleReset = () => {
   queryFormRef.value?.resetFields();
   // 重置所有时间范围组件
@@ -232,7 +264,7 @@ const handleReset = () => {
       ref.reset();
     }
   });
-  emit("resetClick", queryParams);
+  emit("resetClick", buildQueryPayload());
 };
 
 // 处理时间范围变化
@@ -266,8 +298,19 @@ onMounted(() => {
     if (item?.initFn) {
       item.initFn(item);
     }
-    if (["input-tag", "custom-tag", "cascader"].includes(item?.type ?? "")) {
+    if (getCustomComponent(item.type ?? "")) {
+      queryParams[item.prop] = item.initialValue ?? null;
+    } else if (["input-tag", "custom-tag", "cascader"].includes(item?.type ?? "")) {
       queryParams[item.prop] = Array.isArray(item.initialValue) ? item.initialValue : [];
+    } else if (
+      item.type === "date-picker" &&
+      String(item.attrs?.type ?? "")
+        .toLowerCase()
+        .includes("range")
+    ) {
+      queryParams[item.prop] = item.initialValue ?? [];
+    } else if (item.type === "select") {
+      queryParams[item.prop] = item.initialValue !== undefined ? item.initialValue : null;
     } else if (item.type === "input-number") {
       queryParams[item.prop] = item.initialValue ?? null;
     } else {
@@ -277,8 +320,8 @@ onMounted(() => {
 });
 // 暴露的属性和方法
 defineExpose({
-  // 获取分页数据
-  getQueryParams: () => queryParams,
+  // 获取分页数据（与「搜索」提交时一致，含 input trim）
+  getQueryParams: () => buildQueryPayload(),
   // 显示/隐藏 SearchForm
   toggleVisible: () => (visible.value = !visible.value),
 });
@@ -288,8 +331,34 @@ defineExpose({
 :deep(.el-input-number .el-input__inner) {
   text-align: left;
 }
+
 .el-form-item {
   margin-right: 0;
   margin-bottom: 0;
+}
+
+/* 卡片参与 flex 布局链时允许高度随内容收回，避免展开后再收起仍「撑住」 */
+.search-container :deep(.el-card__body) {
+  min-height: 0;
+}
+
+/* 默认行内搜索：明确左起排布，避免展开宽表单项后 flex 残留 justify/end 对齐 */
+.curd-page-search--flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-content: flex-start;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 0;
+}
+
+.curd-page-search--grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+  align-items: center;
+  width: 100%;
 }
 </style>

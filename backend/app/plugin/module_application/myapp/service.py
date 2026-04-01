@@ -57,6 +57,26 @@ class ApplicationService:
         return [ApplicationOutSchema.model_validate(obj).model_dump() for obj in obj_list]
 
     @classmethod
+    async def page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: ApplicationQueryParam | None = None,
+        order_by: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """分页查询应用（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        search_dict = search.__dict__ if search else {}
+        return await ApplicationCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search_dict,
+            out_schema=ApplicationOutSchema,
+        )
+
+    @classmethod
     async def create_service(cls, auth: AuthSchema, data: ApplicationCreateSchema) -> dict:
         """
         创建应用

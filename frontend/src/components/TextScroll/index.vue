@@ -294,7 +294,7 @@ watch(
       text-align: center;
 
       :deep(a) {
-        color: #fd4e4e !important;
+        color: var(--el-color-danger) !important;
         text-decoration: none;
 
         &:hover {

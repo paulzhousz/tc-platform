@@ -68,6 +68,25 @@ class DictTypeService:
         return [DictTypeOutSchema.model_validate(obj).model_dump() for obj in obj_list]
 
     @classmethod
+    async def get_obj_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: DictTypeQueryParam | None = None,
+        order_by: list[dict] | None = None,
+    ) -> dict:
+        """分页查询字典类型（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await DictTypeCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=DictTypeOutSchema,
+        )
+
+    @classmethod
     async def create_obj_service(
         cls, auth: AuthSchema, redis: Redis, data: DictTypeCreateSchema
     ) -> dict:
@@ -165,7 +184,7 @@ class DictTypeService:
                 search={"dict_type": data.dict_type}
             )
             dict_data = [
-                DictDataOutSchema.model_validate(row).model_dump() for row in dict_data_list if row
+                DictDataOutSchema.model_validate(row).model_dump(mode="json") for row in dict_data_list if row
             ]
 
             value = json.dumps(dict_data, ensure_ascii=False)
@@ -309,6 +328,25 @@ class DictDataService:
         return [DictDataOutSchema.model_validate(obj).model_dump() for obj in obj_list]
 
     @classmethod
+    async def get_obj_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: DictDataQueryParam | None = None,
+        order_by: list[dict] | None = None,
+    ) -> dict:
+        """分页查询字典数据（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await DictDataCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=DictDataOutSchema,
+        )
+
+    @classmethod
     async def init_dict_service(cls, redis: Redis) -> None:
         """
         应用初始化: 获取所有字典类型对应的字典数据信息并缓存service
@@ -336,7 +374,7 @@ class DictDataService:
                                 search={"dict_type": dict_type}
                             )
                             dict_data = [
-                                DictDataOutSchema.model_validate(row).model_dump()
+                                DictDataOutSchema.model_validate(row).model_dump(mode="json")
                                 for row in dict_data_list
                                 if row
                             ]
@@ -438,7 +476,7 @@ class DictDataService:
                 search={"dict_type": data.dict_type}
             )
             dict_data = [
-                DictDataOutSchema.model_validate(row).model_dump() for row in dict_data_list if row
+                DictDataOutSchema.model_validate(row).model_dump(mode="json") for row in dict_data_list if row
             ]
 
             value = json.dumps(dict_data, ensure_ascii=False)
@@ -507,7 +545,7 @@ class DictDataService:
                         search={"dict_type": dict_type.dict_type}
                     )
                     dict_data = [
-                        DictDataOutSchema.model_validate(row).model_dump()
+                        DictDataOutSchema.model_validate(row).model_dump(mode="json")
                         for row in dict_data_list
                         if row
                     ]
@@ -527,7 +565,7 @@ class DictDataService:
                 search={"dict_type": data.dict_type}
             )
             dict_data = [
-                DictDataOutSchema.model_validate(row).model_dump() for row in dict_data_list if row
+                DictDataOutSchema.model_validate(row).model_dump(mode="json") for row in dict_data_list if row
             ]
 
             value = json.dumps(dict_data, ensure_ascii=False)

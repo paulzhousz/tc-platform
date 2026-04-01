@@ -7,9 +7,6 @@
       </button>
     </div>
     <div class="navbar-right">
-      <el-button v-if="hasMessages" text :icon="Delete" @click="handleClearChat">
-        清空对话
-      </el-button>
       <el-button text :icon="Setting" @click="handleToggleConnection">
         {{ isConnected ? "断开连接" : "重新连接" }}
       </el-button>
@@ -25,6 +22,9 @@
         </el-icon>
         <span class="status-text">{{ connectionStatusText }}</span>
       </el-tag>
+      <el-button v-if="hasMessages" text :icon="Delete" @click="handleClearChat">
+        清空对话
+      </el-button>
     </div>
   </div>
 </template>
@@ -99,33 +99,63 @@ const toggleSidebar = () => {
       height: 32px;
       padding: 0;
       cursor: pointer;
+      color: var(--el-text-color-regular);
       background: transparent;
       border: none;
       border-radius: 4px;
-      transition: background-color 0.2s;
+      transition:
+        background-color 0.2s,
+        color 0.2s;
 
       &:hover {
-        background: var(--el-fill-color-light);
+        color: var(--el-color-primary);
+        background: var(--el-color-primary-light-9);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--el-color-primary);
+        outline-offset: 2px;
+      }
+
+      /* UnoCSS 图标 SVG 多随 currentColor */
+      & > div {
+        color: inherit;
       }
 
       .collapse-icon {
         width: 20px;
         height: 20px;
-        color: var(--el-text-color-regular);
+        color: inherit;
       }
     }
   }
 
   .navbar-right {
     display: flex;
+    flex-wrap: nowrap;
     gap: 12px;
     align-items: center;
 
+    /* EP 相邻按钮自带 margin-left，叠在 flex gap 上会导致间距忽大忽小 */
+    :deep(.el-button) {
+      margin: 0;
+    }
+
     .connection-status {
-      display: flex;
-      gap: 8px;
+      display: inline-flex;
       align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 0 12px;
+      margin: 0;
       font-size: 14px;
+      line-height: 1;
+
+      :deep(.el-tag__content) {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
 
       .status-icon {
         &.connected {

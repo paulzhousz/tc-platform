@@ -1,7 +1,13 @@
 <template>
   <div class="app-container">
-    <!-- 内容区域 -->
-    <el-card class="data-table">
+    <PageSearch
+      ref="searchRef"
+      :search-config="searchConfig"
+      @query-click="handleQueryClick"
+      @reset-click="handleResetClick"
+    />
+
+    <PageContent ref="contentRef" :content-config="contentConfig">
       <template #header>
         <div class="card-header">
           <span>
@@ -10,7 +16,6 @@
             </el-tooltip>
             文件列表(当前路径)：
           </span>
-          <!-- 资源路径 -->
           <div class="breadcrumb-container">
             <span class="breadcrumb-label"></span>
             <el-breadcrumb separator="/">
@@ -25,48 +30,10 @@
             </el-breadcrumb>
           </div>
         </div>
-        <!-- 搜索区域 -->
-        <div class="search-container">
-          <el-form
-            ref="queryFormRef"
-            :model="queryFormData"
-            :inline="true"
-            label-suffix=":"
-            @submit.prevent="handleQuery"
-          >
-            <el-form-item prop="name" label="关键词">
-              <el-input
-                v-model="queryFormData.name"
-                placeholder="请输入文件名或目录名"
-                clearable
-                style="width: 200px"
-                @keyup.enter="handleQuery"
-              />
-            </el-form-item>
-            <el-form-item class="search-buttons">
-              <el-button
-                v-hasPerm="['module_monitor:resource:query']"
-                type="primary"
-                icon="search"
-                native-type="submit"
-              >
-                查询
-              </el-button>
-              <el-button
-                v-hasPerm="['module_monitor:resource:query']"
-                icon="refresh"
-                @click="handleResetQuery"
-              >
-                重置
-              </el-button>
-            </el-form-item>
-          </el-form>
-        </div>
       </template>
 
-      <!-- 功能区域 -->
-      <div class="data-table__toolbar">
-        <div class="data-table__toolbar--left">
+      <template #toolbar="{ toolbarRight, onToolbar, removeIds, cols }">
+        <CrudToolbarLeft :remove-ids="removeIds">
           <el-row :gutter="10">
             <el-col :span="1.5">
               <el-button
@@ -93,183 +60,123 @@
                 v-hasPerm="['module_monitor:resource:delete']"
                 type="danger"
                 icon="delete"
-                :disabled="selectedItems.length === 0"
+                :disabled="removeIds.length === 0"
                 @click="handleBatchDelete"
               >
                 批量删除
               </el-button>
             </el-col>
           </el-row>
-        </div>
-        <div class="data-table__toolbar--right">
-          <el-row :gutter="10">
-            <el-col :span="1.5">
-              <el-checkbox
-                v-model="showHiddenFiles"
-                v-hasPerm="['module_monitor:resource:query']"
-                @change="handleShowHiddenChange"
-              >
-                显示隐藏文件
-              </el-checkbox>
-            </el-col>
-            <el-col :span="1.5">
-              <el-button-group>
-                <el-button
-                  v-hasPerm="['module_monitor:resource:query']"
-                  :type="viewMode === 'list' ? 'primary' : ''"
-                  @click="viewMode = 'list'"
-                >
-                  <el-icon><List /></el-icon>
-                </el-button>
-                <el-button
-                  v-hasPerm="['module_monitor:resource:query']"
-                  :type="viewMode === 'grid' ? 'primary' : ''"
-                  @click="viewMode = 'grid'"
-                >
-                  <el-icon><Grid /></el-icon>
-                </el-button>
-              </el-button-group>
-            </el-col>
-            <el-col :span="1.5">
-              <el-tooltip content="刷新">
-                <el-button
-                  v-hasPerm="['module_monitor:resource:query']"
-                  type="primary"
-                  icon="refresh"
-                  circle
-                  @click="handleRefresh"
-                />
-              </el-tooltip>
-            </el-col>
-          </el-row>
-        </div>
-      </div>
-
-      <!-- 表格区域 -->
-      <div v-if="viewMode === 'list'" class="data-table__content">
-        <el-table
-          ref="dataTableRef"
-          v-loading="loading"
-          :data="fileList"
-          row-key="file_url"
-          height="calc(100vh - 440px)"
-          max-height="calc(100vh - 440px)"
-          border
-          stripe
-          @selection-change="handleSelectionChange"
-        >
-          <template #empty>
-            <el-empty :image-size="80" description="暂无数据" />
-          </template>
-          <el-table-column type="selection" min-width="40" align="center" />
-          <el-table-column type="index" fixed label="序号" min-width="50">
-            <template #default="scope">
-              {{ (queryFormData.page_no - 1) * queryFormData.page_size + scope.$index + 1 }}
-            </template>
-          </el-table-column>
-          <el-table-column label="名称" prop="name" min-width="200">
-            <template #default="{ row }">
-              <div class="file-name">
-                <el-icon class="file-icon">
-                  <Folder v-if="row.is_dir" />
-                  <Document v-else />
-                </el-icon>
-                <span :class="{ 'file-name-clickable': true }" @click="handleFileNameClick(row)">
-                  {{ row.name }}
-                </span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="大小" prop="size" min-width="120" align="center">
-            <template #default="{ row }">
-              <span v-if="!row.is_dir">{{ formatFileSize(row.size) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="修改时间" prop="modified_time" min-width="180" sortable />
-          <el-table-column
-            fixed="right"
-            label="操作"
-            align="center"
-            min-width="200"
-            class="search-buttons"
+        </CrudToolbarLeft>
+        <div class="data-table__toolbar--right flex flex-wrap items-center gap-3">
+          <el-checkbox
+            v-model="showHiddenFiles"
+            v-hasPerm="['module_monitor:resource:query']"
+            @change="onShowHiddenChange"
           >
-            <template #default="{ row }">
-              <el-button
-                v-if="!row.is_dir"
-                v-hasPerm="['module_monitor:resource:download']"
-                type="success"
-                size="small"
-                link
-                icon="download"
-                @click="handleDownload(row)"
-              >
-                下载
-              </el-button>
-              <el-button
-                v-hasPerm="['module_monitor:resource:rename']"
-                type="primary"
-                size="small"
-                link
-                icon="edit"
-                @click="handleRename(row)"
-              >
-                重命名
-              </el-button>
-              <el-button
-                v-hasPerm="['module_monitor:resource:delete']"
-                type="danger"
-                size="small"
-                link
-                icon="delete"
-                @click="handleDelete(row)"
-              >
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <!-- 网格视图 -->
-      <div v-else class="grid-view">
-        <div
-          v-for="item in fileList"
-          :key="item.file_url"
-          class="grid-item"
-          @click="handleItemClick(item)"
-        >
-          <div class="item-icon">
-            <el-icon v-if="item.is_dir" size="48">
-              <Folder />
-            </el-icon>
-            <el-icon v-else size="48">
-              <Document />
-            </el-icon>
-          </div>
-          <div class="item-name">{{ item.name }}</div>
-          <div v-if="!item.is_dir" class="item-size">
-            {{ formatFileSize(item.size) }}
-          </div>
+            显示隐藏文件
+          </el-checkbox>
+          <CrudToolbarRight :buttons="toolbarRight" :cols="cols" :on-toolbar="onToolbar" />
         </div>
-      </div>
-
-      <!-- 分页区域 -->
-      <template #footer>
-        <Pagination
-          v-model:total="total"
-          v-model:page="pagination.page_no"
-          v-model:limit="pagination.page_size"
-          @pagination="handlePagination"
-        />
       </template>
-    </el-card>
+
+      <template #table="{ data, loading: tableLoading, tableRef, onSelectionChange, pagination }">
+        <div class="data-table__content">
+          <el-table
+            :ref="tableRef as any"
+            v-loading="tableLoading"
+            row-key="file_url"
+            :data="data"
+            height="100%"
+            border
+            stripe
+            @selection-change="
+              (s) => {
+                handleSelectionChange(s as ResourceItem[]);
+                onSelectionChange(s);
+              }
+            "
+          >
+            <template #empty>
+              <el-empty :image-size="80" description="暂无数据" />
+            </template>
+            <el-table-column type="selection" min-width="40" align="center" />
+            <el-table-column type="index" fixed label="序号" min-width="50">
+              <template #default="scope">
+                {{ (pagination.currentPage - 1) * pagination.pageSize + scope.$index + 1 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="名称" prop="name" min-width="200">
+              <template #default="{ row }">
+                <div class="file-name">
+                  <el-icon class="file-icon">
+                    <Folder v-if="row.is_dir" />
+                    <Document v-else />
+                  </el-icon>
+                  <span class="file-name-clickable" @click="handleFileNameClick(row)">
+                    {{ row.name }}
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="大小" prop="size" min-width="120" align="center">
+              <template #default="{ row }">
+                <span v-if="!row.is_dir">{{ formatFileSize(row.size) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="修改时间" prop="modified_time" min-width="180" sortable />
+            <el-table-column
+              fixed="right"
+              label="操作"
+              align="center"
+              min-width="200"
+              class-name="search-buttons"
+            >
+              <template #default="{ row }">
+                <el-button
+                  v-if="!row.is_dir"
+                  v-hasPerm="['module_monitor:resource:download']"
+                  type="success"
+                  size="small"
+                  link
+                  icon="download"
+                  @click="handleDownload(row)"
+                >
+                  下载
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_monitor:resource:rename']"
+                  type="primary"
+                  size="small"
+                  link
+                  icon="edit"
+                  @click="handleRename(row)"
+                >
+                  重命名
+                </el-button>
+                <el-button
+                  v-hasPerm="['module_monitor:resource:delete']"
+                  type="danger"
+                  size="small"
+                  link
+                  icon="delete"
+                  @click="handleDelete(row)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </template>
+    </PageContent>
 
     <!-- 上传对话框 -->
-    <el-dialog
+    <EnhancedDialog
       v-model="uploadDialogVisible"
       title="上传文件"
       width="500px"
-      :before-close="handleUploadClose"
+      @close="handleUploadClose"
     >
       <el-upload
         ref="uploadRef"
@@ -301,10 +208,10 @@
           确定上传
         </el-button>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
 
     <!-- 新建文件夹对话框 -->
-    <el-dialog v-model="createDirDialogVisible" title="新建文件夹" width="400px">
+    <EnhancedDialog v-model="createDirDialogVisible" title="新建文件夹" width="400px">
       <el-form :model="createDirForm" label-width="80px">
         <el-form-item label="文件夹名" required>
           <el-input
@@ -324,10 +231,10 @@
           确定
         </el-button>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
 
     <!-- 重命名对话框 -->
-    <el-dialog v-model="renameDialogVisible" title="重命名" width="400px">
+    <EnhancedDialog v-model="renameDialogVisible" title="重命名" width="400px">
       <el-form :model="renameForm" label-width="80px">
         <el-form-item label="新名称" required>
           <el-input
@@ -347,7 +254,7 @@
           确定
         </el-button>
       </template>
-    </el-dialog>
+    </EnhancedDialog>
   </div>
 </template>
 
@@ -357,62 +264,84 @@ defineOptions({
   inheritAttrs: false,
 });
 
-import { ref, reactive, onMounted, computed } from "vue";
+import { ref, reactive } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import {
-  List,
-  Grid,
-  Folder,
-  Document,
-  UploadFilled,
-  QuestionFilled,
-} from "@element-plus/icons-vue";
+import { Folder, Document, UploadFilled, QuestionFilled } from "@element-plus/icons-vue";
 import {
   ResourceAPI,
   type ResourceItem,
   type ResourcePageQuery,
 } from "@/api/module_monitor/resource";
+import CrudToolbarLeft from "@/components/CURD/CrudToolbarLeft.vue";
+import CrudToolbarRight from "@/components/CURD/CrudToolbarRight.vue";
+import PageSearch from "@/components/CURD/PageSearch.vue";
+import PageContent from "@/components/CURD/PageContent.vue";
+import EnhancedDialog from "@/components/CURD/EnhancedDialog.vue";
+import { useCrudList } from "@/components/CURD/useCrudList";
+import type { IContentConfig, ISearchConfig } from "@/components/CURD/types";
 
-// 分页表单
-const fileList = ref<ResourceItem[]>([]);
+const { searchRef, contentRef, handleQueryClick, handleResetClick, refreshList } = useCrudList();
 
-// 响应式数据
-const loading = ref(false);
 const selectedItems = ref<ResourceItem[]>([]);
 const breadcrumbList = ref([{ name: "资源根目录", path: "/" }]);
 const showHiddenFiles = ref(false);
-const viewMode = ref<"list" | "grid">("list");
-const total = ref(0);
-const isSearchMode = ref(false); // 用于标记是否处于搜索模式
-const queryFormRef = ref();
 
-// 路径相关数据
-const currentPath = ref("/"); // 当前路径的响应式变量
+const currentPath = ref("/");
 
-// 分页查询参数
-const pagination = reactive({
-  page_no: 1,
-  page_size: 10,
+const searchConfig = reactive<ISearchConfig>({
+  permPrefix: "module_monitor:resource",
+  colon: true,
+  isExpandable: false,
+  showNumber: 3,
+  form: { labelWidth: "auto" },
+  searchButtonPerm: "module_monitor:resource:query",
+  resetButtonPerm: "module_monitor:resource:query",
+  formItems: [
+    {
+      prop: "name",
+      label: "关键词",
+      type: "input",
+      attrs: { placeholder: "请输入文件名或目录名", clearable: true, style: { width: "200px" } },
+    },
+  ],
 });
 
-// 搜索表单数据
-const queryFormData = reactive<ResourcePageQuery>({
-  name: undefined,
-  page_no: 1,
-  page_size: 10,
+const contentConfig = reactive<IContentConfig<ResourcePageQuery>>({
+  permPrefix: "module_monitor:resource",
+  cols: [],
+  hideColumnFilter: true,
+  toolbar: [],
+  defaultToolbar: ["refresh"],
+  pk: "file_url",
+  pagination: {
+    pageSize: 10,
+    pageSizes: [10, 20, 30, 50],
+  },
+  request: { page_no: "page_no", page_size: "page_size" },
+  indexAction: async (params) => {
+    const merged: ResourcePageQuery = {
+      ...(params as ResourcePageQuery),
+      include_hidden: showHiddenFiles.value,
+    };
+    if (currentPath.value && currentPath.value !== "/") {
+      merged.path = currentPath.value;
+    }
+    const res = await ResourceAPI.listResource(merged);
+    return {
+      total: res.data.data.total,
+      list: res.data.data.items,
+    };
+  },
 });
 
-// 对话框状态
 const uploadDialogVisible = ref(false);
 const createDirDialogVisible = ref(false);
 const renameDialogVisible = ref(false);
 const uploading = ref(false);
 
-// 上传相关
 const uploadRef = ref();
 const uploadFileList = ref<any[]>([]);
 
-// 表单数据
 const createDirForm = reactive({
   dir_name: "",
 });
@@ -422,77 +351,18 @@ const renameForm = reactive({
   old_path: "",
 });
 
-// 计算属性
-const currentQuery = computed(() => {
-  // 构建查询参数
-  const query: any = {
-    include_hidden: showHiddenFiles.value,
-    page_no: pagination.page_no,
-    page_size: pagination.page_size,
-  };
-
-  // 如果当前路径不是根路径，则添加路径参数
-  if (currentPath.value && currentPath.value !== "/") {
-    // 对于文件夹导航，直接传递文件夹名称
-    query.path = currentPath.value;
-  }
-
-  // 添加搜索关键词
-  if (queryFormData.name) {
-    query.name = queryFormData.name;
-  }
-
-  return query;
-});
-
-// 加载文件列表
-async function loadFileList() {
-  loading.value = true;
-  try {
-    const response = await ResourceAPI.listResource(currentQuery.value);
-
-    // 正确处理后端返回的分页数据结构
-    const pageResult = response.data?.data;
-
-    if (pageResult && Array.isArray(pageResult.items)) {
-      fileList.value = pageResult.items;
-      total.value = pageResult.total;
-      if (pageResult.page_no !== undefined) {
-        pagination.page_no = pageResult.page_no;
-      }
-      if (pageResult.page_size !== undefined) {
-        pagination.page_size = pageResult.page_size;
-      }
-    } else {
-      fileList.value = [];
-      total.value = 0;
-    }
-  } catch (error) {
-    console.error("Load file list error:", error);
-    fileList.value = [];
-    total.value = 0;
-  } finally {
-    loading.value = false;
-  }
-}
-
-// 面包屑点击处理
-function handleBreadcrumbClick(item: any) {
-  // 更新当前路径为点击的面包屑项路径
+function handleBreadcrumbClick(item: { path: string }) {
   currentPath.value = item.path;
   updateBreadcrumb();
-  loadFileList();
+  refreshList();
 }
 
-// 更新面包屑路径
 function updateBreadcrumb() {
-  // 对于根路径，直接显示根目录
   if (currentPath.value === "/") {
     breadcrumbList.value = [{ name: "资源根目录", path: "/" }];
     return;
   }
 
-  // 对于嵌套路径，需要分解并构建面包屑
   const parts = currentPath.value.split("/").filter((part) => part !== "");
 
   breadcrumbList.value = [
@@ -504,73 +374,43 @@ function updateBreadcrumb() {
   ];
 }
 
-// 文件名点击处理
 function handleFileNameClick(row: ResourceItem) {
   if (row.is_dir) {
-    // 如果当前在根路径，则直接使用文件夹名称
-    // 如果当前已在某个文件夹中，则拼接路径
     if (currentPath.value === "/") {
       currentPath.value = row.name;
     } else {
       currentPath.value = currentPath.value + "/" + row.name;
     }
     updateBreadcrumb();
-    loadFileList();
+    refreshList();
   } else {
-    // 文件预览，使用后端返回的完整URL
     handleFilePreview(row);
   }
 }
 
-// 网格视图项目点击处理
-function handleItemClick(item: ResourceItem) {
-  if (item.is_dir) {
-    // 如果当前在根路径，则直接使用文件夹名称
-    // 如果当前已在某个文件夹中，则拼接路径
-    if (currentPath.value === "/") {
-      currentPath.value = item.name;
-    } else {
-      currentPath.value = currentPath.value + "/" + item.name;
-    }
-    updateBreadcrumb();
-    loadFileList();
-  } else {
-    // 文件预览，使用后端返回的完整URL
-    handleFilePreview(item);
-  }
-}
-
-// 文件预览
 function handleFilePreview(file: ResourceItem) {
-  // 直接使用file_url字段进行预览
   let previewUrl = file.file_url;
 
-  // 如果是相对路径，构建完整URL
   if (previewUrl && !previewUrl.startsWith("http")) {
     previewUrl = `${window.location.origin}${previewUrl}`;
   }
 
-  // 所有文件类型统一直接打开预览
   window.open(previewUrl, "_blank");
 }
 
-// 选择项变化处理
 function handleSelectionChange(selection: ResourceItem[]) {
   selectedItems.value = selection;
 }
 
-// 打开上传对话框
 function handleUpload() {
   uploadDialogVisible.value = true;
   uploadFileList.value = [];
 }
 
-// 上传文件变化处理
-function handleUploadChange(file: any, fileList: any[]) {
-  uploadFileList.value = fileList;
+function handleUploadChange(_file: unknown, fileList: unknown[]) {
+  uploadFileList.value = fileList as any[];
 }
 
-// 确认上传文件
 async function handleUploadConfirm() {
   if (uploadFileList.value.length === 0) {
     ElMessage.warning("请选择要上传的文件");
@@ -580,17 +420,17 @@ async function handleUploadConfirm() {
   try {
     uploading.value = true;
     const formData = new FormData();
-    uploadFileList.value.forEach((file: any) => {
-      formData.append("file", file.raw);
+    uploadFileList.value.forEach((file: { raw?: Blob }) => {
+      const raw = file.raw;
+      if (raw) formData.append("file", raw);
     });
 
-    // 在根目录时传递空字符串作为target_path，与后端relative_path格式保持一致
     const targetPath = currentPath.value === "/" ? "" : currentPath.value;
     formData.append("target_path", targetPath);
 
     await ResourceAPI.uploadFile(formData);
     uploadDialogVisible.value = false;
-    loadFileList();
+    refreshList();
   } catch (error) {
     console.error("Upload error:", error);
   } finally {
@@ -598,19 +438,16 @@ async function handleUploadConfirm() {
   }
 }
 
-// 关闭上传对话框
 function handleUploadClose() {
   uploadDialogVisible.value = false;
   uploadFileList.value = [];
 }
 
-// 打开新建目录对话框
 function handleCreateDir() {
   createDirForm.dir_name = "";
   createDirDialogVisible.value = true;
 }
 
-// 确认创建目录
 async function handleCreateDirConfirm() {
   if (!createDirForm.dir_name.trim()) {
     ElMessage.warning("请输入文件夹名称");
@@ -618,47 +455,24 @@ async function handleCreateDirConfirm() {
   }
 
   try {
-    // 在根目录时传递空字符串作为parent_path，与后端relative_path格式保持一致
     const parentPath = currentPath.value === "/" ? "" : currentPath.value;
     await ResourceAPI.createDirectory({
       parent_path: parentPath,
       dir_name: createDirForm.dir_name.trim(),
     });
     createDirDialogVisible.value = false;
-    loadFileList();
+    refreshList();
   } catch (error) {
     console.error("Create directory error:", error);
   }
 }
 
-// 列表刷新
-async function handleRefresh() {
-  await loadFileList();
+function onShowHiddenChange() {
+  refreshList();
 }
 
-// 查询（重置页码后获取数据）
-async function handleQuery() {
-  queryFormData.page_no = 1;
-  await loadFileList();
-}
-
-// 重置查询
-async function handleResetQuery() {
-  queryFormRef.value.resetFields();
-  queryFormData.page_no = 1;
-  isSearchMode.value = false; // 退出搜索模式
-  await loadFileList();
-}
-
-// 显示隐藏文件切换
-function handleShowHiddenChange() {
-  loadFileList();
-}
-
-// 文件下载
 async function handleDownload(item: ResourceItem) {
   try {
-    // 使用file_url字段
     const response = await ResourceAPI.downloadFile(item.file_url);
     const blob = response.data;
     const url = window.URL.createObjectURL(blob);
@@ -674,15 +488,12 @@ async function handleDownload(item: ResourceItem) {
   }
 }
 
-// 打开重命名对话框
 function handleRename(item: ResourceItem) {
-  // 使用file_url字段
   renameForm.old_path = item.file_url;
   renameForm.new_name = item.name;
   renameDialogVisible.value = true;
 }
 
-// 确认重命名
 async function handleRenameConfirm() {
   if (!renameForm.new_name.trim()) {
     ElMessage.warning("请输入新名称");
@@ -695,13 +506,12 @@ async function handleRenameConfirm() {
       new_name: renameForm.new_name.trim(),
     });
     renameDialogVisible.value = false;
-    loadFileList();
+    refreshList();
   } catch (error) {
     console.error("Rename error:", error);
   }
 }
 
-// 文件删除
 async function handleDelete(item: ResourceItem) {
   try {
     await ElMessageBox.confirm(`确定要删除 ${item.name} 吗？`, "确认删除", {
@@ -710,9 +520,8 @@ async function handleDelete(item: ResourceItem) {
       type: "warning",
     });
 
-    // 使用file_url字段
     await ResourceAPI.deleteResource([item.file_url]);
-    loadFileList();
+    refreshList();
   } catch (error) {
     if (error !== "cancel") {
       console.error("Delete error:", error);
@@ -720,14 +529,6 @@ async function handleDelete(item: ResourceItem) {
   }
 }
 
-// 分页处理
-function handlePagination(params: { page: number; limit: number }) {
-  pagination.page_no = params.page;
-  pagination.page_size = params.limit;
-  loadFileList();
-}
-
-// 批量删除
 async function handleBatchDelete() {
   if (selectedItems.value.length === 0) {
     ElMessage.warning("请选择要删除的文件");
@@ -745,11 +546,10 @@ async function handleBatchDelete() {
       }
     );
 
-    // 使用file_url字段
     const paths = selectedItems.value.map((item) => item.file_url);
 
     await ResourceAPI.deleteResource(paths);
-    loadFileList();
+    refreshList();
   } catch (error) {
     if (error !== "cancel") {
       console.error("Batch delete error:", error);
@@ -757,7 +557,6 @@ async function handleBatchDelete() {
   }
 }
 
-// 格式化文件大小
 function formatFileSize(size?: number | null) {
   if (!size || size === null) return "-";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -771,11 +570,6 @@ function formatFileSize(size?: number | null) {
 
   return `${fileSize.toFixed(1)} ${units[unitIndex]}`;
 }
-
-// 生命周期
-onMounted(() => {
-  loadFileList();
-});
 </script>
 
 <style lang="scss" scoped>
@@ -798,30 +592,6 @@ onMounted(() => {
         color: var(--el-color-primary-light-3);
         text-decoration: underline;
       }
-    }
-  }
-}
-
-.grid-view {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 20px;
-  height: calc(100vh - 200px);
-
-  .grid-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    cursor: pointer;
-    // 使用系统主题颜色
-    border-radius: 8px;
-    transition: all 0.3s;
-
-    .item-name {
-      margin-bottom: 5px;
-      font-size: 14px;
-      text-align: center;
-      word-break: break-all;
     }
   }
 }

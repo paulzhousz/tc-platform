@@ -56,6 +56,25 @@ class PositionService:
         ]
 
     @classmethod
+    async def get_position_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: PositionQueryParam | None = None,
+        order_by: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """分页查询岗位（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await PositionCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=PositionOutSchema,
+        )
+
+    @classmethod
     async def create_position_service(cls, auth: AuthSchema, data: PositionCreateSchema) -> dict:
         """
         创建岗位

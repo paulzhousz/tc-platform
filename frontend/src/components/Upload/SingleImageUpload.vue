@@ -325,19 +325,19 @@ const onError = (error: any) => {
     right: 1px;
     display: none;
     font-size: 16px;
-    color: #ff7901;
+    color: var(--el-color-warning);
     cursor: pointer;
-    background: #fff;
+    background: var(--el-bg-color-overlay);
     border-radius: 100%;
 
     &:hover {
-      color: #ff4500;
+      color: var(--el-color-danger);
     }
   }
 
   &__add-btn {
     font-size: 28px;
-    color: #8c939d;
+    color: var(--el-text-color-placeholder);
   }
 }
 
@@ -356,6 +356,6 @@ const onError = (error: any) => {
 .el-upload__tip {
   margin-top: 7px;
   font-size: 12px;
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 </style>

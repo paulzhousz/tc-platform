@@ -1,5 +1,5 @@
 import type { DialogProps, DrawerProps, FormItemRule, PaginationProps } from "element-plus";
-import type { FormProps, TableProps, ColProps, ButtonProps, CardProps } from "element-plus";
+import type { FormProps, ColProps, ButtonProps, CardProps } from "element-plus";
 import type PageContent from "./PageContent.vue";
 import type PageModal from "./PageModal.vue";
 import type PageSearch from "./PageSearch.vue";
@@ -35,14 +35,16 @@ export type ISearchComponent =
   | "checkbox"
   | "switch"
   | "rate"
-  | "slider";
+  | "slider"
+  /** 在 customComponents 中注册的自定义搜索控件类型 */
+  | "user-table-select";
 export type IComponentType = DateComponent | InputComponent | OtherComponent;
 
 /**
  * 工具按钮类型定义
  */
 type ToolbarLeft = "add" | "delete" | "import" | "export";
-type ToolbarRight = "refresh" | "filter" | "imports" | "exports" | "search";
+type ToolbarRight = "refresh" | "filter" | "import" | "imports" | "exports" | "search";
 type ToolbarTable = "edit" | "view" | "delete";
 
 /**
@@ -100,7 +102,7 @@ export interface ISearchConfig {
   cardAttrs?: Partial<CardProps> & { style?: CSSProperties };
   /** form组件属性 */
   form?: IForm;
-  /** 自适应网格布局(使用时表单不要添加 style: { width: "200px" }) */
+  /** 启用等宽网格布局；为 "right" 时操作按钮靠行末 */
   grid?: boolean | "left" | "right";
   /** 自定义组件映射 */
   customComponents?: Record<string, any>;
@@ -137,8 +139,8 @@ export interface ISearchConfig {
 export interface IContentConfig<T = any> {
   /** 权限前缀(如sys:user，用于组成权限标识)，不提供则不进行权限校验 */
   permPrefix?: string;
-  /** table组件属性 */
-  table?: Omit<TableProps<any>, "data">;
+  /** table组件属性（用 IObject 避免与 el-table TableProps.context 等内部类型不兼容） */
+  table?: IObject;
   /** 页面标题与提示（用于卡片头部显示） */
   title?: string;
   /** 提示信息 */
@@ -156,6 +158,11 @@ export interface IContentConfig<T = any> {
       >;
   /** 列表的网络请求函数(需返回promise) */
   indexAction: (queryParams: T) => Promise<any>;
+  /**
+   * 是否在挂载时立即请求列表（默认 true）。
+   * 若需在父组件合并 PageSearch 与额外条件后再请求，可设为 false，并在 onMounted 中自行调用 fetchPageData。
+   */
+  initialFetch?: boolean;
   /** 默认的分页相关的请求参数 */
   request?: {
     page_no: string;
@@ -175,6 +182,14 @@ export interface IContentConfig<T = any> {
   }) => Promise<any>;
   /** 删除的网络请求函数(需返回promise) */
   deleteAction?: (ids: string) => Promise<any>;
+  /** 删除确认弹窗（不传则标题「警告」、内容「确认删除?」） */
+  deleteConfirm?: {
+    title?: string;
+    message?: string;
+    confirmButtonText?: string;
+    cancelButtonText?: string;
+    type?: "warning" | "info" | "success" | "error";
+  };
   /** 后端导出的网络请求函数(需返回promise) */
   exportAction?: (queryParams: T) => Promise<any>;
   /** 前端全量导出的网络请求函数(需返回promise) */
@@ -191,6 +206,14 @@ export interface IContentConfig<T = any> {
   toolbar?: Array<ToolbarLeft | IToolsButton>;
   /** 表格工具栏右侧图标(默认:refresh,filter,imports,exports,search) */
   defaultToolbar?: Array<ToolbarRight | IToolsButton>;
+  /** 使用 #table 插槽自定义表格/树表时，为 true 则隐藏「列筛选」按钮（避免与自定义列不同步） */
+  hideColumnFilter?: boolean;
+  /** 内容区外层 el-card 额外 class */
+  cardClass?: string;
+  /** el-card 阴影（默认 never，与 Element Plus el-card shadow 一致） */
+  cardShadow?: "always" | "hover" | "never";
+  /** 是否显示表格上方工具条（默认 true；纯卡片/无按钮时可设为 false） */
+  showToolbar?: boolean;
   /** 更多操作按钮配置 */
   moreButtons?: Array<IToolsButton>;
   /** table组件列属性(额外的属性templet,operat,slotName) */
@@ -263,6 +286,16 @@ export interface IContentConfig<T = any> {
 }
 
 /**
+ * PageContent 左侧 `createToolbar` 产物，供 CrudToolbarLeft 的 `configButtons` 使用。
+ */
+export type CrudToolbarConfigButton = {
+  name: string;
+  text?: string;
+  attrs?: Record<string, unknown>;
+  perm?: string | string[] | null;
+};
+
+/**
  * 模态框配置接口
  */
 export interface IModalConfig<T = any> {
@@ -274,8 +307,8 @@ export interface IModalConfig<T = any> {
   pk?: string;
   /** 组件类型(默认：dialog) */
   component?: "dialog" | "drawer";
-  /** dialog组件属性 */
-  dialog?: Partial<Omit<DialogProps, "modelValue">>;
+  /** dialog组件属性（默认可拖拽；全屏由 EnhancedDialog 标题栏按钮切换） */
+  dialog?: Partial<Omit<DialogProps, "modelValue">> & { draggable?: boolean };
   /** drawer组件属性 */
   drawer?: Partial<Omit<DrawerProps, "modelValue">>;
   /** 查看模式渲染方式(默认：form；可选：descriptions) */

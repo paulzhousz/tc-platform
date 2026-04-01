@@ -123,7 +123,7 @@ class OperationLogRoute(APIRoute):
                 if request.client:
                     request_ip = request.client.host
 
-            login_location = await IpLocalUtil.get_ip_location(request_ip) if request_ip else None
+            login_location = await IpLocalUtil.resolve_location_for_log(request_ip)
 
             # 判断请求是否来自api文档
             referer = request.headers.get("referer")

@@ -6,7 +6,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.module_system.auth.schema import AuthSchema
-from app.common.request import PaginationService
 from app.common.response import ResponseSchema, StreamResponse, SuccessResponse
 from app.core.base_params import PaginationQueryParam
 from app.core.base_schema import BatchSetAvailable
@@ -225,13 +224,12 @@ async def get_obj_list_controller(
     返回:
     - JSONResponse: 分页查询结果JSON响应
     """
-    result_dict_list = await UserService.get_user_list_service(
-        search=search, auth=auth, order_by=page.order_by
-    )
-    result_dict = await PaginationService.paginate(
-        data_list=result_dict_list,
+    result_dict = await UserService.get_user_page_service(
+        auth=auth,
         page_no=page.page_no,
         page_size=page.page_size,
+        search=search,
+        order_by=page.order_by,
     )
     log.info("查询用户成功")
     return SuccessResponse(data=result_dict, msg="查询用户成功")

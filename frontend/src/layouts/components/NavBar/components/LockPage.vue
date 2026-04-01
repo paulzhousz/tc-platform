@@ -88,14 +88,10 @@ import { useRouter } from "vue-router";
 import { useUserStore, useLockStore } from "@/store";
 import { ElInput } from "element-plus";
 import { useNow } from "@/utils/dateUtil";
-import { useTagsViewStore } from "@/store";
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const tagsViewStore = useTagsViewStore();
-
-const { replace } = useRouter();
 
 const password = ref("");
 const loading = ref(false);
@@ -123,14 +119,12 @@ async function unLock() {
   }
 }
 
-// 返回登录
+// 返回登录（logout 成功会 resetAllState；失败时再清一次本地，避免仍带 token）
 async function goLogin() {
   await userStore.logout().catch(() => {});
-  userStore.resetAllState();
-  tagsViewStore.delAllViews();
-  router.push(`/login?redirect=${route.fullPath}`);
+  await userStore.resetAllState();
   lockStore.resetLockInfo();
-  replace("/login");
+  await router.replace(`/login?redirect=${encodeURIComponent(route.fullPath)}`);
 }
 
 const passwordInputRef = ref<InstanceType<typeof ElInput>>();
@@ -158,7 +152,8 @@ function handleShowForm(show = false) {
   justify-content: center;
   width: 100%;
   height: 100%;
-  background-color: black;
+  color: var(--el-color-white);
+  background-color: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(8px);
 
   .unlock-container {
@@ -172,7 +167,7 @@ function handleShowForm(show = false) {
     height: 4rem;
     padding: 0.5rem 1rem;
     padding-top: 1.25rem;
-    color: #fff;
+    color: inherit;
     cursor: pointer;
     border-radius: 12px;
     transform: translateX(-50%);
@@ -199,8 +194,8 @@ function handleShowForm(show = false) {
       margin-bottom: 2rem;
       font-size: 220px;
       font-weight: 700;
-      color: #bababa;
-      background-color: #141313;
+      color: var(--el-text-color-primary);
+      background-color: var(--el-bg-color-overlay);
       border-radius: 16px;
       backdrop-filter: blur(8px);
     }
@@ -213,8 +208,8 @@ function handleShowForm(show = false) {
       margin-bottom: 2rem;
       font-size: 220px;
       font-weight: 700;
-      color: #bababa;
-      background-color: #141313;
+      color: var(--el-text-color-primary);
+      background-color: var(--el-bg-color-overlay);
       border-radius: 16px;
       backdrop-filter: blur(8px);
     }
@@ -241,7 +236,7 @@ function handleShowForm(show = false) {
   }
   .entry-content {
     width: 260px;
-    color: #bababa;
+    color: var(--el-text-color-regular);
     text-align: center;
   }
 
@@ -260,7 +255,7 @@ function handleShowForm(show = false) {
   .username {
     margin: 0.625rem 0;
     font-size: 0.875rem;
-    color: var(--logo-title-text-color);
+    color: var(--el-text-color-primary);
   }
 
   .password-input {
@@ -271,7 +266,7 @@ function handleShowForm(show = false) {
     display: inline-block;
     margin-top: 0.625rem;
     font-size: 0.875rem;
-    color: #ed6f6f;
+    color: var(--el-color-danger);
   }
 
   .button-group {
@@ -297,7 +292,7 @@ function handleShowForm(show = false) {
     position: absolute;
     bottom: 1.25rem;
     width: 100%;
-    color: #d1d5db;
+    color: inherit;
     text-align: center;
 
     @media (min-width: 1280px) {

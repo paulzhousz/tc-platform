@@ -104,6 +104,25 @@ class ParamsService:
         return [ParamsOutSchema.model_validate(obj).model_dump() for obj in obj_list]
 
     @classmethod
+    async def get_obj_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: ParamsQueryParam | None = None,
+        order_by: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """分页查询参数（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await ParamsCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=ParamsOutSchema,
+        )
+
+    @classmethod
     async def create_obj_service(
         cls, auth: AuthSchema, redis: Redis, data: ParamsCreateSchema
     ) -> dict:
@@ -166,12 +185,14 @@ class ParamsService:
         new_obj = await ParamsCRUD(auth).update_obj_crud(id=id, data=data)
         if not new_obj:
             raise CustomException(msg="更新失败，系统配置不存在")
-        new_obj_dict = ParamsOutSchema.model_validate(new_obj).model_dump()
+        out = ParamsOutSchema.model_validate(new_obj)
+        new_obj_dict = out.model_dump()
+        redis_payload = out.model_dump(mode="json")
 
         # 同步redis
         redis_key = f"{RedisInitKeyConfig.SYSTEM_CONFIG.key}:{new_obj.config_key}"
         try:
-            value = json.dumps(new_obj_dict, ensure_ascii=False)
+            value = json.dumps(redis_payload, ensure_ascii=False)
             result = await RedisCURD(redis).set(
                 key=redis_key,
                 value=value,
@@ -306,8 +327,10 @@ class ParamsService:
                     # 保存到Redis并设置过期时间
                     for config in config_obj:
                         redis_key = f"{RedisInitKeyConfig.SYSTEM_CONFIG.key}:{config.config_key}"
-                        config_obj_dict = ParamsOutSchema.model_validate(config).model_dump()
-                        value = json.dumps(config_obj_dict, ensure_ascii=False)
+                        out = ParamsOutSchema.model_validate(config)
+                        config_obj_dict = out.model_dump()
+                        redis_payload = out.model_dump(mode="json")
+                        value = json.dumps(redis_payload, ensure_ascii=False)
                         result = await RedisCURD(redis).set(
                             key=redis_key,
                             value=value,

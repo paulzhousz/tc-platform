@@ -20,7 +20,7 @@ class PageResultSchema(BaseModel):
 
 
 class PaginationService:
-    """分页服务类"""
+    """分页服务类（仅用于无法 SQL OFFSET/LIMIT 的数据源，如 Redis、本地文件列表、ORM 反射全量表名等）。"""
 
     @staticmethod
     async def paginate(
@@ -29,9 +29,8 @@ class PaginationService:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """
-        分页数据处理。
-        输入数据列表和分页信息，返回分页数据列表结果。
-        未传入 page_no 和 page_size 时，使用默认值进行分页。
+        对已在内存中的列表做切片分页。
+        关系型表列表请使用 CRUDBase.page（数据库分页）。
 
         参数:
         - data_list (list[Any]): 原始数据列表。

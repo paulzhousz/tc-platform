@@ -325,7 +325,7 @@ class ChatService:
         search: ChatSessionQueryParam,
         order_by: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
-        """分页获取会话列表 - 使用内存分页"""
+        """分页获取会话列表。会话由 Agno 存储，无统一 SQL 分页接口，仅能对内存列表切片。"""
         crud = ChatSessionCRUD(auth)
         # 获取所有会话
         sessions = await crud.list_crud()
@@ -333,7 +333,7 @@ class ChatService:
         # 转换为响应模型 - 使用 TeamSession 内置的 to_dict 方法并格式化
         items = [await _format_session_data(s, auth) for s in sessions]
 
-        # 使用 PaginationService 进行内存分页
+        # 非关系型会话存储，沿用内存分页
         result = await PaginationService.paginate(
             data_list=items,
             page_no=page_no,

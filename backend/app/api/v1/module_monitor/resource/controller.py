@@ -50,7 +50,7 @@ async def get_directory_list_controller(
     result_dict_list = await ResourceService.get_resources_list_service(
         search=search, base_url=str(request.base_url)
     )
-    # 使用分页服务进行分页处理（与案例模块保持一致）
+    # 目录列表来自本地文件系统扫描，无 SQL 分页
     result_dict = await PaginationService.paginate(
         data_list=result_dict_list,
         page_no=page.page_no,

@@ -76,6 +76,36 @@ class NoticeService:
         ]
 
     @classmethod
+    async def get_notice_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: NoticeQueryParam | None = None,
+        order_by: list[dict] | None = None,
+    ) -> dict:
+        """分页查询公告（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await NoticeCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=NoticeOutSchema,
+        )
+
+    @classmethod
+    async def get_notice_available_page_service(cls, auth: AuthSchema) -> dict:
+        """已启用公告分页（与历史行为一致：默认第 1 页、每页 10 条）。"""
+        return await NoticeCRUD(auth).page(
+            offset=0,
+            limit=10,
+            order_by=[{"id": "asc"}],
+            search={"status": "0"},
+            out_schema=NoticeOutSchema,
+        )
+
+    @classmethod
     async def create_notice_service(cls, auth: AuthSchema, data: NoticeCreateSchema) -> dict:
         """
         创建公告。

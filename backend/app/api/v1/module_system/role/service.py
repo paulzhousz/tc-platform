@@ -55,6 +55,25 @@ class RoleService:
         return [RoleOutSchema.model_validate(role).model_dump() for role in role_list]
 
     @classmethod
+    async def get_role_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: RoleQueryParam | None = None,
+        order_by: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """分页查询角色（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await RoleCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=RoleOutSchema,
+        )
+
+    @classmethod
     async def create_role_service(cls, auth: AuthSchema, data: RoleCreateSchema) -> dict:
         """
         创建角色

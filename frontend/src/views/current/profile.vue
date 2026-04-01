@@ -290,12 +290,11 @@ import type {
 } from "element-plus";
 import UserAPI, { type InfoFormState, type PasswordFormState } from "@/api/module_system/user";
 import { useUserStore, useDictStore } from "@/store";
-import { useUserStoreHook } from "@/store/modules/user.store";
 import { Camera } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { nextTick } from "vue";
-import router from "@/router";
+import { redirectToLogin } from "@/utils/authRedirect";
 
 const { t } = useI18n();
 const userStore = useUserStore();
@@ -548,28 +547,6 @@ const handlePasswordChange = async () => {
     passwordChanging.value = false;
   }
 };
-
-/**
- * 重定向到登录页面
- */
-async function redirectToLogin(message: string = "请重新登录"): Promise<void> {
-  try {
-    ElNotification({
-      title: "提示",
-      message,
-      type: "warning",
-      duration: 3000,
-    });
-
-    await useUserStoreHook().resetAllState();
-
-    // 跳转到登录页，保留当前路由用于登录后跳转
-    const currentPath = router.currentRoute.value.fullPath;
-    await router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
-  } catch (error: any) {
-    console.error(error);
-  }
-}
 
 onMounted(async () => {
   await getOptions();

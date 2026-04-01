@@ -23,11 +23,12 @@ class GenUtils:
         返回:
         - None
         """
-        # 只有当字段为None时才设置默认值
         gen_table.class_name = cls.convert_class_name(gen_table.table_name or "")
-        gen_table.package_name = "gencode"
-        gen_table.module_name = f"module_{gen_table.package_name}"
-        gen_table.business_name = gen_table.table_name
+        # 不再默认 module_gencode（避免误导）。包名/模块名由前端按业务填写：
+        # - 不选上级菜单：包名 = module_{模块名}
+        # - module_example 三段式：包名=module_example，模块名=demo...
+        if gen_table.business_name is None:
+            gen_table.business_name = gen_table.table_name
         gen_table.function_name = re.sub(r"(?:表|测试)", "", gen_table.table_comment or "")
 
     @classmethod
@@ -44,7 +45,7 @@ class GenUtils:
         """
         data_type = cls.get_db_type(column.column_type or "")
         column_name = column.column_name or ""
-        if not table.id:
+        if table.id is None:
             raise ValueError("业务表ID不能为空")
         column.table_id = table.id
         column.python_field = cls.to_camel_case(column_name)

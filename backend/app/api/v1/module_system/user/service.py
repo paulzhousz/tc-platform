@@ -87,6 +87,25 @@ class UserService:
         return user_dict_list
 
     @classmethod
+    async def get_user_page_service(
+        cls,
+        auth: AuthSchema,
+        page_no: int,
+        page_size: int,
+        search: UserQueryParam | None = None,
+        order_by: list[dict[str, str]] | None = None,
+    ) -> dict:
+        """分页查询用户（数据库 OFFSET/LIMIT）。"""
+        offset = (page_no - 1) * page_size
+        return await UserCRUD(auth).page(
+            offset=offset,
+            limit=page_size,
+            order_by=order_by or [{"id": "asc"}],
+            search=search.__dict__ if search else {},
+            out_schema=UserOutSchema,
+        )
+
+    @classmethod
     async def create_user_service(cls, data: UserCreateSchema, auth: AuthSchema) -> dict:
         """
         创建用户
